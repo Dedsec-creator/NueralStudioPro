@@ -1,0 +1,6 @@
+{
+  "name": "NeuralTune Ultra",
+  "description": "A high-clarity vocal studio DAW with dual-track vocal & beat stems, Auto Noise Gate & De-Harsh, Pro Vocal AI Enhancer, synergistic transient alignment, real-time pitch correction, Antares-style tuning dial, mic locker, and mastering suite.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
