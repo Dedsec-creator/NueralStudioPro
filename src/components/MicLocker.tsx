@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MicLockerSettings, MicModelId, PolarPattern } from '../types';
 import { MIC_MODELS } from '../audio/micProfiles';
-import { Mic2, Radio, Wind, Sparkles, Flame, ShieldAlert } from 'lucide-react';
+import { Mic2, Radio, Wind, Sparkles, Flame, Sliders, Cpu, Activity, Zap } from 'lucide-react';
 
 interface MicLockerProps {
   settings: MicLockerSettings;
   onChange: (updated: MicLockerSettings) => void;
 }
 
+type MicFilterCategory = 'ALL' | 'Tube Condenser' | 'FET Condenser' | 'Dynamic' | 'Ribbon';
+
 export const MicLocker: React.FC<MicLockerProps> = ({ settings, onChange }) => {
-  const currentMic = MIC_MODELS[settings.selectedMic];
+  const [activeCategory, setActiveCategory] = useState<MicFilterCategory>('ALL');
+  const currentMic = MIC_MODELS[settings.selectedMic] || MIC_MODELS.c800g;
 
   const handleSelectMic = (id: MicModelId) => {
     const model = MIC_MODELS[id];
@@ -18,22 +21,33 @@ export const MicLocker: React.FC<MicLockerProps> = ({ settings, onChange }) => {
       selectedMic: id,
       proximity: model.defaultProximity,
       drive: model.defaultDrive,
+      transformerWarmth: settings.transformerWarmth ?? 40,
+      capsuleResonance: settings.capsuleResonance ?? 30,
+      impedanceMode: settings.impedanceMode ?? 'modern',
     });
   };
+
+  const filteredMics = Object.values(MIC_MODELS).filter(mic => {
+    if (activeCategory === 'ALL') return true;
+    return mic.type === activeCategory;
+  });
 
   return (
     <div className="rounded-2xl bg-gradient-to-b from-slate-900/95 via-slate-900/90 to-slate-950 border border-slate-800 p-5 shadow-2xl backdrop-blur-md">
       {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+      <div className="flex items-center justify-between pb-4 border-b border-slate-800 flex-wrap gap-2">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
             <Mic2 className="w-4 h-4" />
           </div>
           <div>
             <h3 className="text-sm font-bold tracking-wide text-white uppercase flex items-center gap-2">
-              Virtual Microphone Locker
+              Virtual Microphone Locker & Modulation
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                {Object.keys(MIC_MODELS).length} MICS
+              </span>
             </h3>
-            <p className="text-[11px] text-slate-400 font-mono">Analog Capsule & Transformer Emulation</p>
+            <p className="text-[11px] text-slate-400 font-mono">Analog Capsule, Output Transformer & Impedance Emulation</p>
           </div>
         </div>
 
@@ -52,43 +66,63 @@ export const MicLocker: React.FC<MicLockerProps> = ({ settings, onChange }) => {
         </button>
       </div>
 
-      {/* 4 Microphone Selector Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-        {Object.values(MIC_MODELS).map(mic => {
+      {/* Category Filter Pills */}
+      <div className="flex items-center gap-1.5 mt-3.5 overflow-x-auto pb-1 scrollbar-none">
+        {(['ALL', 'Tube Condenser', 'FET Condenser', 'Dynamic', 'Ribbon'] as MicFilterCategory[]).map(cat => {
+          const isCurrent = activeCategory === cat;
+          return (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-3 py-1 rounded-lg text-[11px] font-mono font-bold transition-all cursor-pointer whitespace-nowrap border ${
+                isCurrent
+                  ? 'bg-amber-500/20 border-amber-400/60 text-amber-300 shadow-sm'
+                  : 'bg-slate-950/60 border-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              {cat}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Microphone Selector Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 mt-3 max-h-60 overflow-y-auto pr-1">
+        {filteredMics.map(mic => {
           const isSelected = settings.selectedMic === mic.id;
           return (
             <button
               key={mic.id}
               onClick={() => handleSelectMic(mic.id)}
-              className={`p-3 rounded-xl text-left transition-all relative overflow-hidden cursor-pointer border ${
+              className={`p-2.5 rounded-xl text-left transition-all relative overflow-hidden cursor-pointer border ${
                 isSelected
-                  ? 'bg-gradient-to-b from-slate-800 to-slate-900 border-amber-400/70 shadow-lg shadow-amber-500/10'
-                  : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/40'
+                  ? 'bg-gradient-to-b from-slate-800 to-slate-900 border-amber-400 shadow-lg shadow-amber-500/10 ring-1 ring-amber-400/30'
+                  : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/50'
               }`}
             >
               {isSelected && (
                 <div className="absolute top-0 right-0 w-2 h-2 rounded-bl bg-amber-400" />
               )}
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-mono text-amber-400/90 font-bold uppercase">
-                  {mic.type}
+                <span className="text-[9px] font-mono text-amber-400 font-bold uppercase truncate max-w-[70%]">
+                  {mic.type.replace(' Condenser', '')}
                 </span>
-                <span className="text-[9px] font-mono text-slate-400">c. {mic.vintageYear}</span>
+                <span className="text-[9px] font-mono text-slate-500">{mic.vintageYear}</span>
               </div>
               <h4 className="text-xs font-bold text-white truncate">{mic.name}</h4>
-              <p className="text-[10px] text-slate-400 line-clamp-2 mt-1 leading-snug">{mic.tagline}</p>
+              <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">{mic.manufacturer}</p>
             </button>
           );
         })}
       </div>
 
-      {/* Selected Mic Feature Strip & EQ Visualizer */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mt-5 bg-slate-950/80 p-4 rounded-xl border border-slate-800">
-        {/* Mic Profile Description & Frequency Graph (Col 1-7) */}
-        <div className="lg:col-span-7 space-y-3">
+      {/* Selected Mic Detail Strip & Modulation Controls */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mt-4 bg-slate-950/80 p-4 rounded-xl border border-slate-800">
+        {/* Mic Profile Description & Frequency Graph (Col 1-6) */}
+        <div className="lg:col-span-6 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-mono uppercase text-slate-400">Current Modeling Target:</span>
+              <span className="text-[10px] font-mono uppercase text-slate-400">Current Target Capsule:</span>
               <h4 className="text-sm font-bold text-white flex items-center gap-2">
                 {currentMic.name}
                 <span className="text-[11px] font-mono font-normal text-amber-400">({currentMic.manufacturer})</span>
@@ -102,7 +136,7 @@ export const MicLocker: React.FC<MicLockerProps> = ({ settings, onChange }) => {
           <p className="text-xs text-slate-300 leading-relaxed">{currentMic.description}</p>
 
           {/* Interactive Simulated Frequency Response Curve Bar Chart */}
-          <div className="pt-2">
+          <div className="pt-1">
             <span className="text-[10px] font-mono text-slate-400 mb-1 block">Capsule Response Curve (dB offset):</span>
             <div className="grid grid-cols-5 gap-1.5 h-16 items-end bg-slate-900/90 p-2 rounded-lg border border-slate-800">
               {currentMic.eqCurve.map((point, idx) => {
@@ -124,16 +158,43 @@ export const MicLocker: React.FC<MicLockerProps> = ({ settings, onChange }) => {
               })}
             </div>
           </div>
+
+          {/* Preamp Impedance Voicing */}
+          <div className="pt-1">
+            <label className="text-[10px] font-mono text-slate-400 mb-1 flex items-center gap-1">
+              <Cpu className="w-3 h-3 text-amber-400" />
+              Preamp Voicing / Impedance Load:
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { id: 'modern', label: 'Modern Clean' },
+                { id: 'vintage_200', label: '200Ω Transformer' },
+                { id: 'tube_high_z', label: 'High-Z Tube' },
+              ].map(imp => (
+                <button
+                  key={imp.id}
+                  onClick={() => onChange({ ...settings, impedanceMode: imp.id as any })}
+                  className={`py-1 px-1.5 rounded text-[10px] font-mono font-bold transition-all cursor-pointer truncate ${
+                    (settings.impedanceMode || 'modern') === imp.id
+                      ? 'bg-amber-400 text-slate-950 font-black'
+                      : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {imp.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Mic Controls (Col 8-12) */}
-        <div className="lg:col-span-5 space-y-3.5 border-t lg:border-t-0 lg:border-l border-slate-800 pt-3 lg:pt-0 lg:pl-5">
+        {/* Mic Modulation Controls (Col 7-12) */}
+        <div className="lg:col-span-6 space-y-3 border-t lg:border-t-0 lg:border-l border-slate-800 pt-3 lg:pt-0 lg:pl-5">
           {/* Proximity Slider */}
           <div>
             <div className="flex justify-between text-xs mb-1">
               <span className="text-slate-300 flex items-center gap-1.5">
                 <Wind className="w-3.5 h-3.5 text-amber-400" />
-                Proximity (Bass Bloom):
+                Proximity (Low-End Chest Bloom):
               </span>
               <span className="font-mono text-amber-400 font-bold">{settings.proximity} cm</span>
             </div>
@@ -152,7 +213,7 @@ export const MicLocker: React.FC<MicLockerProps> = ({ settings, onChange }) => {
             <div className="flex justify-between text-xs mb-1">
               <span className="text-slate-300 flex items-center gap-1.5">
                 <Flame className="w-3.5 h-3.5 text-amber-400" />
-                Tube / FET Harmonics:
+                Tube / FET Harmonic Overdrive:
               </span>
               <span className="font-mono text-amber-400 font-bold">{settings.drive}%</span>
             </div>
@@ -166,12 +227,50 @@ export const MicLocker: React.FC<MicLockerProps> = ({ settings, onChange }) => {
             />
           </div>
 
+          {/* Transformer Warmth (Mic Modulation) */}
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-slate-300 flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                Output Transformer Warmth:
+              </span>
+              <span className="font-mono text-amber-400 font-bold">{settings.transformerWarmth ?? 40}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={settings.transformerWarmth ?? 40}
+              onChange={e => onChange({ ...settings, transformerWarmth: Number(e.target.value) })}
+              className="w-full accent-amber-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
+            />
+          </div>
+
+          {/* Capsule Resonance (Mic Modulation) */}
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-slate-300 flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-amber-400" />
+                Capsule Body Resonance:
+              </span>
+              <span className="font-mono text-amber-400 font-bold">{settings.capsuleResonance ?? 30}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={settings.capsuleResonance ?? 30}
+              onChange={e => onChange({ ...settings, capsuleResonance: Number(e.target.value) })}
+              className="w-full accent-amber-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
+            />
+          </div>
+
           {/* Air Boost (14kHz) */}
           <div>
             <div className="flex justify-between text-xs mb-1">
               <span className="text-slate-300 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                14kHz Crystalline Air:
+                14kHz Crystalline Air Sheen:
               </span>
               <span className="font-mono text-amber-400 font-bold">+{settings.airBoost.toFixed(1)} dB</span>
             </div>

@@ -17,13 +17,21 @@ export type MicModelId =
   | 'sm7b' 
   | 'u87' 
   | 'u47' 
+  | 'u67'
   | 'c12' 
+  | 'c414'
   | 'tlm103' 
   | 'md421' 
   | 're20' 
   | 'r121' 
   | 'manley_gold' 
-  | 'nt1';
+  | 'nt1'
+  | 'wa87'
+  | 'blue_bottle'
+  | 'sm58'
+  | 'slate_ml1'
+  | 'at4040'
+  | 'chandler_tg';
 
 export type PolarPattern = 'cardioid' | 'omni' | 'figure8';
 
@@ -80,6 +88,26 @@ export interface MicLockerSettings {
   polarPattern: PolarPattern;
   lowCutHz: 0 | 80 | 120;
   airBoost: number; // 0 to 6 dB
+  transformerWarmth?: number; // 0 to 100% vintage output transformer emulation
+  capsuleResonance?: number; // 0 to 100% physical capsule body resonance
+  impedanceMode?: 'modern' | 'vintage_200' | 'tube_high_z';
+}
+
+export interface AutoPresetBeatMixResult {
+  matchedPreset: ArtistVocalPreset;
+  detectedKey: MusicalKey;
+  detectedScale: MusicalScale;
+  detectedBpm: number;
+  beatVibe: string;
+  vocalTimbre: string;
+  carveFreqHz: number;
+  carveDepthDb: number;
+  sidechainDuckPercent: number;
+  vocalVolume: number;
+  beatVolume: number;
+  loudnessTargetLufs: number;
+  summary: string;
+  timestamp: number;
 }
 
 export interface DenoiseSettings {

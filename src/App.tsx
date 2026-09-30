@@ -41,8 +41,10 @@ import { BottomTransportDock } from './components/BottomTransportDock';
 import { LiveRecordingHUD } from './components/LiveRecordingHUD';
 import { SettingsModal } from './components/SettingsModal';
 import { AutoMixModal } from './components/AutoMixModal';
+import { AutoPresetBeatMixModal } from './components/AutoPresetBeatMixModal';
 import { GoogleDriveModal } from './components/GoogleDriveModal';
 import { PerformanceOptimizerModal } from './components/PerformanceOptimizerModal';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { launchGooglePicker } from './services/googlePickerService';
 import {
   DEFAULT_STUDIO_SETTINGS,
@@ -65,6 +67,7 @@ export default function App() {
   });
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isAutoMixModalOpen, setIsAutoMixModalOpen] = useState(false);
+  const [isAutoPresetBeatMixModalOpen, setIsAutoPresetBeatMixModalOpen] = useState(false);
 
   // Master Studio State
   const [tuningSettings, setTuningSettings] = useState<TuningSettings>(DEFAULT_PRESET.tuning);
@@ -738,6 +741,7 @@ export default function App() {
         onOpenPresetsModal={() => setIsPresetModalOpen(true)}
         onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
         onOpenAutoMixModal={() => setIsAutoMixModalOpen(true)}
+        onOpenAutoPresetBeatMixModal={() => setIsAutoPresetBeatMixModalOpen(true)}
         onOpenGoogleDrive={() => handleOpenGoogleDrive('beat')}
         onOpenGooglePicker={() => handleOpenGooglePicker('beat')}
         onOpenOptimizer={() => setIsOptimizerModalOpen(true)}
@@ -964,6 +968,7 @@ export default function App() {
         onToggleMic={handleMicToggle}
         onToggleRecord={handleToggleRecord}
         onOpenPitchFormant={() => setActiveSection('pitch_formant')}
+        onOpenAutoMix={() => setIsAutoPresetBeatMixModalOpen(true)}
         canUndo={historyStatus.canUndo}
         canRedo={historyStatus.canRedo}
         onUndo={handleUndo}
@@ -977,6 +982,20 @@ export default function App() {
         onStopRecording={handleStopRecording}
         onCancelRecording={handleCancelRecording}
         onToggleMonitoring={() => audioEngine.toggleLiveMonitoring()}
+      />
+
+      {/* 1-Click AI Auto-Preset & Smart Beat-Vocal Sync Modal */}
+      <AutoPresetBeatMixModal
+        isOpen={isAutoPresetBeatMixModalOpen}
+        onClose={() => setIsAutoPresetBeatMixModalOpen(false)}
+        onPresetApplied={(preset) => {
+          handleApplyPreset(preset);
+          setTracks({
+            vocal: { ...audioEngine.vocalTrackInfo },
+            beat: { ...audioEngine.beatTrackInfo },
+          });
+          setSynergySettings({ ...audioEngine.synergySettings });
+        }}
       />
 
       {/* Cloud Presets Modal */}
@@ -1029,6 +1048,9 @@ export default function App() {
         onClose={() => setIsOptimizerModalOpen(false)}
         currentLatencyMs={audioMetrics.latencyMs}
       />
+
+      {/* Offline Connectivity Notification Indicator */}
+      <OfflineIndicator />
 
       {/* Studio Footer Status Bar */}
       <footer className="hidden sm:block border-t border-slate-800/80 bg-slate-950/80 px-4 py-2.5 text-[11px] font-mono text-slate-400 pb-2.5">

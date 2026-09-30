@@ -214,6 +214,9 @@ export class NeuralTuneAudioEngine {
   private micFilters: BiquadFilterNode[] = [];
   private proximityFilter: BiquadFilterNode | null = null;
   private micDriveNode: WaveShaperNode | null = null;
+  private micTransformerFilter: BiquadFilterNode | null = null;
+  private micCapsuleResonanceFilter: BiquadFilterNode | null = null;
+  private micImpedanceFilter: BiquadFilterNode | null = null;
 
   // Tuning pitch shifter
   private pitchShifterNode: BiquadFilterNode | null = null;
@@ -1107,6 +1110,28 @@ export class NeuralTuneAudioEngine {
       lastNode = f;
     }
 
+    // Mic Modulation Stages: Transformer, Capsule Resonance & Impedance
+    this.micTransformerFilter = this.ctx.createBiquadFilter();
+    this.micTransformerFilter.type = 'lowshelf';
+    this.micTransformerFilter.frequency.value = 95;
+    this.micTransformerFilter.gain.value = 0;
+
+    this.micCapsuleResonanceFilter = this.ctx.createBiquadFilter();
+    this.micCapsuleResonanceFilter.type = 'peaking';
+    this.micCapsuleResonanceFilter.frequency.value = 6500;
+    this.micCapsuleResonanceFilter.Q.value = 1.4;
+    this.micCapsuleResonanceFilter.gain.value = 0;
+
+    this.micImpedanceFilter = this.ctx.createBiquadFilter();
+    this.micImpedanceFilter.type = 'highshelf';
+    this.micImpedanceFilter.frequency.value = 12000;
+    this.micImpedanceFilter.gain.value = 0;
+
+    lastNode.connect(this.micTransformerFilter);
+    this.micTransformerFilter.connect(this.micCapsuleResonanceFilter);
+    this.micCapsuleResonanceFilter.connect(this.micImpedanceFilter);
+    lastNode = this.micImpedanceFilter;
+
     // 5. Real-time Tuning stage
     this.pitchShifterNode = this.ctx.createBiquadFilter();
     this.pitchShifterNode.type = 'peaking';
@@ -1838,6 +1863,73 @@ export class NeuralTuneAudioEngine {
     }
   }
 
+  // Load demo beat without overwriting existing vocal track
+  public async loadDemoBeat(genre: 'pop_a_minor' | 'rnb_c_major' | 'rap_f_minor' = 'rap_f_minor'): Promise<boolean> {
+    await this.initialize();
+    if (!this.ctx) return false;
+    try {
+      const duration = Math.max(12, this.vocalBuffer?.duration || 12);
+      const beatBuf = generateSyntheticBeatBuffer(this.ctx, genre, duration);
+      this.beatBuffer = beatBuf;
+      const beatPeaks = extractWaveformPeaks(beatBuf, 80);
+      const bpm = detectBPM(beatBuf);
+      this.synergySettings.detectedBeatBpm = bpm;
+      const genreLabel = genre === 'pop_a_minor' ? 'Pop 120' : genre === 'rnb_c_major' ? 'R&B 88' : 'Trap 140';
+      this.beatTrackInfo = {
+        name: `Studio Beat (${genreLabel} BPM)`,
+        duration: beatBuf.duration,
+        sampleRate: beatBuf.sampleRate,
+        isCustomFile: false,
+        volume: 0.85,
+        playbackRate: 1.0,
+        isMuted: false,
+        isSolo: false,
+        peaks: beatPeaks,
+      };
+      if (this.vocalBuffer) {
+        this.autoAlignStems(this.synergySettings.rideStyle);
+      }
+      this.notifyTracksChanged();
+      this.notifySynergyChanged();
+      return true;
+    } catch (e) {
+      console.warn('Failed to load demo beat:', e);
+      return false;
+    }
+  }
+
+  // Load demo vocal without overwriting existing beat track
+  public async loadDemoVocal(): Promise<boolean> {
+    await this.initialize();
+    if (!this.ctx) return false;
+    try {
+      const duration = Math.max(12, this.beatBuffer?.duration || 12);
+      const vocalBuf = generateSyntheticVocalBuffer(this.ctx, duration);
+      this.vocalBuffer = vocalBuf;
+      const vocalPeaks = extractWaveformPeaks(vocalBuf, 80);
+      this.vocalTrackInfo = {
+        name: 'Studio Vocal Stem (A Min)',
+        duration: vocalBuf.duration,
+        sampleRate: vocalBuf.sampleRate,
+        isCustomFile: false,
+        volume: 0.95,
+        playbackRate: 1.0,
+        isMuted: false,
+        isSolo: false,
+        peaks: vocalPeaks,
+      };
+      if (this.beatBuffer) {
+        this.autoAlignStems(this.synergySettings.rideStyle);
+      }
+      this.notifyTracksChanged();
+      this.notifySynergyChanged();
+      return true;
+    } catch (e) {
+      console.warn('Failed to load demo vocal:', e);
+      return false;
+    }
+  }
+
   // Automatic transient synergy alignment between vocal and beat with AI Pocket Attunement
   public autoAlignStems(style: PocketRideStyle = this.synergySettings.rideStyle): AlignmentAnalysisResult | null {
     if (!this.beatBuffer || !this.vocalBuffer) return null;
@@ -2038,7 +2130,7 @@ export class NeuralTuneAudioEngine {
     this.notifyTracksChanged();
   }
 
-  private updateTrackGains(): void {
+  private updateTrackGains(smoothFadeIn: boolean = false): void {
     if (!this.ctx || !this.vocalGainNode || !this.beatGainNode) return;
     const now = this.ctx.currentTime;
 
@@ -2056,8 +2148,17 @@ export class NeuralTuneAudioEngine {
     if (this.vocalTrackInfo.isMuted) vocalGain = 0;
     if (this.beatTrackInfo.isMuted) beatGain = 0;
 
-    this.vocalGainNode.gain.setTargetAtTime(vocalGain, now, 0.015);
-    this.beatGainNode.gain.setTargetAtTime(beatGain, now, 0.015);
+    if (smoothFadeIn) {
+      this.vocalGainNode.gain.cancelScheduledValues(now);
+      this.beatGainNode.gain.cancelScheduledValues(now);
+      this.vocalGainNode.gain.setValueAtTime(0.0001, now);
+      this.beatGainNode.gain.setValueAtTime(0.0001, now);
+      this.vocalGainNode.gain.exponentialRampToValueAtTime(Math.max(0.0001, vocalGain), now + 0.008);
+      this.beatGainNode.gain.exponentialRampToValueAtTime(Math.max(0.0001, beatGain), now + 0.008);
+    } else {
+      this.vocalGainNode.gain.setTargetAtTime(vocalGain, now, 0.015);
+      this.beatGainNode.gain.setTargetAtTime(beatGain, now, 0.015);
+    }
   }
 
   public subscribeTracks(cb: (tracks: { vocal: TrackStemInfo; beat: TrackStemInfo }) => void): () => void {
@@ -2479,7 +2580,7 @@ export class NeuralTuneAudioEngine {
       });
     }
 
-    this.stopPlayback();
+    this.stopPlayback(true);
 
     const totalDuration = this.getDuration();
     if (totalDuration <= 0 && !this.isLiveMicActive) {
@@ -2526,7 +2627,8 @@ export class NeuralTuneAudioEngine {
       this.vocalSourceNode.start(0, vocalOffset);
     }
 
-    this.updateTrackGains();
+    // Zero-crossing de-clicked micro-fade-in to eliminate pops and clicks
+    this.updateTrackGains(true);
     this.updatePitchFormantDSP();
     this.isPlaying = true;
   }
@@ -2734,7 +2836,7 @@ export class NeuralTuneAudioEngine {
     this.onPitchFormantUpdate?.(this.pitchFormantSettings);
   }
 
-  private stopPlayback(): void {
+  private stopPlayback(immediate: boolean = false): void {
     if (this.stutterIntervalId !== null) {
       window.clearInterval(this.stutterIntervalId);
       this.stutterIntervalId = null;
@@ -2742,19 +2844,35 @@ export class NeuralTuneAudioEngine {
     if (this.stutterGainNode && this.ctx) {
       this.stutterGainNode.gain.setValueAtTime(1.0, this.ctx.currentTime);
     }
-    if (this.vocalSourceNode) {
+    const oldVocal = this.vocalSourceNode;
+    const oldBeat = this.beatSourceNode;
+    this.vocalSourceNode = null;
+    this.beatSourceNode = null;
+
+    if (!immediate && this.ctx) {
+      const now = this.ctx.currentTime;
+      // Soft micro-fade to eliminate clicks, pops, and harsh cutting
+      if (this.vocalGainNode) this.vocalGainNode.gain.setTargetAtTime(0.0001, now, 0.002);
+      if (this.beatGainNode) this.beatGainNode.gain.setTargetAtTime(0.0001, now, 0.002);
+      setTimeout(() => {
+        try {
+          oldVocal?.stop();
+          oldVocal?.disconnect();
+        } catch {}
+        try {
+          oldBeat?.stop();
+          oldBeat?.disconnect();
+        } catch {}
+      }, 10);
+    } else {
       try {
-        this.vocalSourceNode.stop();
-        this.vocalSourceNode.disconnect();
+        oldVocal?.stop();
+        oldVocal?.disconnect();
       } catch {}
-      this.vocalSourceNode = null;
-    }
-    if (this.beatSourceNode) {
       try {
-        this.beatSourceNode.stop();
-        this.beatSourceNode.disconnect();
+        oldBeat?.stop();
+        oldBeat?.disconnect();
       } catch {}
-      this.beatSourceNode = null;
     }
   }
 
@@ -2877,28 +2995,35 @@ export class NeuralTuneAudioEngine {
         : this.denoiseSettings.threshold;
 
       const now = performance.now();
-      const holdDuration = this.denoiseSettings.gateHoldMs ?? 80;
+      // Increase default hold and release to prevent vocal cutting and syllable dropout
+      const holdDuration = Math.max(160, this.denoiseSettings.gateHoldMs ?? 180);
       const attackSec = Math.max(0.002, (this.denoiseSettings.gateAttackMs ?? 6) * 0.001);
-      const releaseSec = Math.max(0.02, (this.denoiseSettings.gateReleaseMs ?? 140) * 0.001);
+      const releaseSec = Math.max(0.03, (this.denoiseSettings.gateReleaseMs ?? 180) * 0.001);
 
-      if (inRmsDb >= effectiveThreshold) {
+      // Hysteresis: threshold to close is 5dB lower than threshold to open
+      const closeThreshold = effectiveThreshold - 5.0;
+      const isAboveOpen = inRmsDb >= effectiveThreshold;
+      const isAboveClose = inRmsDb >= closeThreshold;
+
+      if (isAboveOpen) {
         // Vocal present -> Open Gate
         this.autoGateOpen = true;
         this.autoGateHoldUntilMs = now + holdDuration;
         this.denoiseGain.gain.setTargetAtTime(1.0, this.ctx.currentTime, attackSec);
         currentNoiseReductionDb = 0;
-      } else if (now < this.autoGateHoldUntilMs) {
-        // Hold gate open smoothly to avoid vocal stutter
+      } else if (now < this.autoGateHoldUntilMs || (this.autoGateOpen && isAboveClose)) {
+        // Hold gate open smoothly across speech pauses, breaths, and word endings
         this.autoGateOpen = true;
-        this.denoiseGain.gain.setTargetAtTime(1.0, this.ctx.currentTime, 0.005);
+        this.denoiseGain.gain.setTargetAtTime(1.0, this.ctx.currentTime, 0.008);
         currentNoiseReductionDb = 0;
       } else {
-        // Below gate threshold -> apply downward expansion / background clamp
+        // Below gate threshold -> apply gentle downward expansion
         this.autoGateOpen = false;
-        const maxRed = this.denoiseSettings.reduction;
-        const underDb = effectiveThreshold - inRmsDb;
-        const reductionRatio = (this.denoiseSettings.sensitivity / 100) * 1.5;
-        const redDb = Math.min(maxRed, Math.max(6, underDb * reductionRatio));
+        // When actively playing back stems, soften clamp so vocal tails are never cut off
+        const maxRed = this.isPlaying ? Math.min(8, this.denoiseSettings.reduction) : this.denoiseSettings.reduction;
+        const underDb = closeThreshold - inRmsDb;
+        const reductionRatio = (this.denoiseSettings.sensitivity / 100) * 1.2;
+        const redDb = Math.min(maxRed, Math.max(0, underDb * reductionRatio));
         const gainLinear = Math.pow(10, -redDb / 20);
         this.denoiseGain.gain.setTargetAtTime(gainLinear, this.ctx.currentTime, releaseSec);
         currentNoiseReductionDb = Math.round(redDb * 10) / 10;
@@ -3183,6 +3308,24 @@ export class NeuralTuneAudioEngine {
         this.micFilters[idx].Q.setTargetAtTime(point.q, this.ctx.currentTime, 0.02);
       }
     });
+
+    // Output Transformer Warmth
+    if (this.micTransformerFilter) {
+      const warmthDb = ((settings.transformerWarmth ?? 40) / 100) * 4.5;
+      this.micTransformerFilter.gain.setTargetAtTime(warmthDb, this.ctx.currentTime, 0.02);
+    }
+
+    // Physical Capsule Body Resonance
+    if (this.micCapsuleResonanceFilter) {
+      const resDb = ((settings.capsuleResonance ?? 30) / 100) * 3.5;
+      this.micCapsuleResonanceFilter.gain.setTargetAtTime(resDb, this.ctx.currentTime, 0.02);
+    }
+
+    // Preamp Impedance Voicing
+    if (this.micImpedanceFilter) {
+      const impGain = settings.impedanceMode === 'vintage_200' ? -1.8 : settings.impedanceMode === 'tube_high_z' ? 2.5 : 0;
+      this.micImpedanceFilter.gain.setTargetAtTime(impGain, this.ctx.currentTime, 0.02);
+    }
   }
 
   // Update Denoise settings

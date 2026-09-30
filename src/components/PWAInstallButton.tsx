@@ -5,6 +5,7 @@ import { Download, Smartphone, X, CheckCircle2 } from 'lucide-react';
 export const PWAInstallButton: React.FC = () => {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const [showDesktopGuide, setShowDesktopGuide] = useState(false);
 
   if (isInstalled) {
     return (
@@ -72,7 +73,7 @@ export const PWAInstallButton: React.FC = () => {
               </div>
               <button
                 onClick={() => setShowIOSGuide(false)}
-                className="mt-5 w-full rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 text-xs font-semibold transition"
+                className="mt-5 w-full rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 text-xs font-semibold transition cursor-pointer"
               >
                 Close
               </button>
@@ -83,16 +84,57 @@ export const PWAInstallButton: React.FC = () => {
     );
   }
 
-  // Fallback direct button showing install capability
+  // Fallback desktop guide modal
   return (
-    <button
-      id="btn-install-info"
-      onClick={() => alert("To install NeuralTune Ultra, use your browser's 'Install' or 'Add to Home Screen' option in the address bar.")}
-      className="hidden sm:flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-xs px-2.5 py-1.5 transition cursor-pointer"
-      title="Install PWA"
-    >
-      <Download className="w-3.5 h-3.5 text-cyan-400" />
-      <span>Install PWA</span>
-    </button>
+    <>
+      <button
+        id="btn-install-info"
+        onClick={() => setShowDesktopGuide(true)}
+        className="hidden sm:flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-950/30 hover:bg-cyan-900/40 text-cyan-300 hover:text-white font-medium text-xs px-2.5 py-1.5 transition cursor-pointer"
+        title="Install NeuralTune Ultra Desktop App"
+      >
+        <Download className="w-3.5 h-3.5 text-cyan-400" />
+        <span>Install App</span>
+      </button>
+
+      {showDesktopGuide && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-xl bg-slate-900 border border-slate-700 p-5 shadow-2xl text-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Download className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-sm font-bold text-white">Install NeuralTune Desktop App</h3>
+              </div>
+              <button
+                onClick={() => setShowDesktopGuide(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-3 text-xs text-slate-300 leading-relaxed">
+              <div className="flex items-start gap-2.5">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center text-[11px]">1</span>
+                <p>Look for the <strong className="text-white">Install App</strong> icon (desktop monitor with arrow) in your browser’s URL address bar.</p>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center text-[11px]">2</span>
+                <p>Or open browser menu (three dots) &rarr; <strong className="text-white">Install NeuralTune Ultra</strong>.</p>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center text-[11px]">3</span>
+                <p>Launches as an isolated native desktop window with dedicated DSP thread and zero browser tabs.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowDesktopGuide(false)}
+              className="mt-5 w-full rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold py-2 text-xs transition cursor-pointer"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 };

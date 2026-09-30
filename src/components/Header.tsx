@@ -23,6 +23,7 @@ import {
   Save,
 } from 'lucide-react';
 import { ArtistVocalPreset, AutoSaveStatus } from '../types';
+import { PWAInstallButton } from './PWAInstallButton';
 
 export type StudioSectionId = 'tracks' | 'presets' | 'tuning' | 'pitch_formant' | 'ai_enhancer' | 'mic' | 'plugins' | 'mastering' | 'library' | 'all';
 
@@ -30,6 +31,7 @@ interface HeaderProps {
   onOpenPresetsModal: () => void;
   onOpenSettingsModal: () => void;
   onOpenAutoMixModal: () => void;
+  onOpenAutoPresetBeatMixModal?: () => void;
   onOpenGoogleDrive?: () => void;
   onOpenGooglePicker?: () => void;
   onOpenOptimizer?: () => void;
@@ -54,6 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenPresetsModal,
   onOpenSettingsModal,
   onOpenAutoMixModal,
+  onOpenAutoPresetBeatMixModal,
   onOpenGoogleDrive,
   onOpenGooglePicker,
   onOpenOptimizer,
@@ -238,15 +241,27 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden sm:inline">Drive Hub</span>
           </button>
 
+          {/* 1-Click AI Auto-Preset & Beat Mixer Button */}
+          <button
+            id="btn-header-auto-preset-sync"
+            onClick={onOpenAutoPresetBeatMixModal}
+            className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 hover:brightness-110 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/25 border border-amber-300 ring-1 ring-amber-400/40 transition cursor-pointer active:scale-95"
+            title="✨ Auto-Preset & Beat Mixer: 1-Click AI analyzes beat & vocals, carves frequency pockets, and auto-applies matching artist preset"
+          >
+            <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
+            <span className="hidden sm:inline">Auto-Preset & Mix</span>
+            <span className="sm:hidden">Auto-Mix</span>
+          </button>
+
           {/* AI Auto-Mix Trigger Button */}
           <button
             id="btn-header-auto-mix"
             onClick={onOpenAutoMixModal}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 transition cursor-pointer active:scale-95"
-            title="AI Auto-Mix: Instant offline trap & hip-hop mastering"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-semibold shadow-sm transition cursor-pointer active:scale-95"
+            title="AI Mastering Suite: Multiband loudness & brickwall limiting"
           >
-            <Flame className="w-3.5 h-3.5 text-slate-950 fill-current" />
-            <span className="hidden xs:inline">Auto-Mix</span>
+            <Flame className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden xs:inline">Mastering</span>
           </button>
 
           {/* Cloud Presets Modal Backup / Sync Button */}
@@ -270,6 +285,9 @@ export const Header: React.FC<HeaderProps> = ({
             <Zap className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden sm:inline">Optimizer</span>
           </button>
+
+          {/* PWA / Native Desktop App Install Trigger */}
+          <PWAInstallButton />
 
           {/* Settings Menu Button in the Top-Right Corner */}
           <button

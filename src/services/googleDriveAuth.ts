@@ -54,23 +54,47 @@ export interface GoogleAuthState {
  * Loads the Google Identity Services client script if not already present.
  */
 function loadGisScript(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined') return reject(new Error('Browser only'));
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') return resolve();
     if (window.google?.accounts?.oauth2) {
       return resolve();
     }
+
+    let resolved = false;
+    const finish = () => {
+      if (!resolved) {
+        resolved = true;
+        resolve();
+      }
+    };
+
+    // Check polling in case script is loading in parallel
+    const pollInterval = setInterval(() => {
+      if (window.google?.accounts?.oauth2) {
+        clearInterval(pollInterval);
+        finish();
+      }
+    }, 80);
+
+    // Timeout safety net (3.5s)
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      finish();
+    }, 3500);
+
     const existing = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
     if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('Failed to load Google Identity Services.')));
+      existing.addEventListener('load', finish, { once: true });
+      existing.addEventListener('error', finish, { once: true });
       return;
     }
+
     const script = document.createElement('script');
     script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
     script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Google Identity Services.'));
+    script.onload = finish;
+    script.onerror = finish;
     document.head.appendChild(script);
   });
 }
@@ -173,6 +197,21 @@ export async function requestTokenViaGis(): Promise<{ user: User; accessToken: s
  * Uses Firebase Auth with automatic GIS fallback for robust operation across all browser and iframe sandbox contexts.
  */
 export async function signInWithGoogle(): Promise<{ user: User; accessToken: string }> {
+  const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+
+  // In iframe environments, GIS tokenClient avoids Firebase cross-origin iframe cookie issues
+  if (isInIframe && firebaseConfig.oAuthClientId) {
+    try {
+      return await requestTokenViaGis();
+    } catch (gisErr: any) {
+      console.warn('GIS direct sign-in attempt notice:', gisErr);
+      if (gisErr?.code === 'auth/popup-closed-by-user') {
+        throw gisErr;
+      }
+      // Fall through to Firebase popup attempt if GIS wasn't completed
+    }
+  }
+
   try {
     const result = await signInWithPopup(auth, driveProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
@@ -192,15 +231,25 @@ export async function signInWithGoogle(): Promise<{ user: User; accessToken: str
       err.code === 'auth/internal-error' ||
       err.code === 'auth/unauthorized-domain' ||
       err.code === 'auth/operation-not-supported-in-this-environment' ||
-      err.code === 'auth/cancelled-popup-request';
+      err.code === 'auth/cancelled-popup-request' ||
+      err.code === 'auth/popup-blocked' ||
+      String(err.message || '').includes('network-request-failed') ||
+      String(err.message || '').includes('popup');
 
     if (isNetworkOrPopupError) {
       console.warn('Firebase Auth popup hit network/environment barrier. Falling back to Google Identity Services (GIS)...', err);
       try {
         return await requestTokenViaGis();
       } catch (gisErr: any) {
-        console.error('GIS token request error:', gisErr);
-        throw gisErr;
+        console.warn('GIS token request note:', gisErr);
+        if (gisErr?.code === 'auth/popup-closed-by-user') {
+          throw gisErr;
+        }
+        const friendlyError: any = new Error(
+          'Google Drive connection restricted in this browser environment. You can import audio stems directly from your device below.'
+        );
+        friendlyError.code = 'auth/environment-restricted';
+        throw friendlyError;
       }
     }
 

@@ -1,12 +1,19 @@
 import {
+  ArtistVocalPreset,
   AutoMixAnalysis,
   AutoMixFrequencyBalance,
   AutoMixPresetDefinition,
   AutoMixPresetId,
   AutoMixResult,
+  AutoPresetBeatMixResult,
+  MusicalKey,
+  MusicalScale,
   RenderSpeedId,
 } from '../types';
 import { audioEngine } from './audioEngine';
+import { FACTORY_ARTIST_PRESETS } from './presets';
+import { detectKeyAndScale } from './pitchDetector';
+import { detectBPM } from './transientAligner';
 
 // ============================================================================
 // MASSIVE LIBRARY OF EXTREME MASTERING PRESETS (JSON / OBJECT STRUCTURE)
@@ -975,3 +982,186 @@ export function applyAutoMixToLiveEngine(presetId: AutoMixPresetId): void {
     aiProfile: 'trap_rap',
   });
 }
+
+// ============================================================================
+// 1-CLICK AI AUTO-PRESET & BEAT-VOCAL MIXER
+// Analyzes Beat and Vocals, finds ideal artist preset, auto-tunes key & scale,
+// carves frequency pocket in beat, applies sidechain ducking, and glues the mix!
+// ============================================================================
+export function autoMatchBeatToVocalsAndApplyPreset(): AutoPresetBeatMixResult {
+  const beatBuffer = audioEngine.beatBuffer;
+  const vocalBuffer = audioEngine.vocalBuffer;
+
+  // 1. Analyze Beat buffer or fallback
+  let detectedKey: MusicalKey = 'C';
+  let detectedScale: MusicalScale = 'Minor Natural';
+  let detectedBpm = 130;
+  let beatSubBass = 50;
+  let beatMids = 50;
+  let beatAir = 50;
+  let beatVibe = 'Commercial Modern Hip-Hop / Pop';
+
+  if (beatBuffer) {
+    const keyRes = detectKeyAndScale(beatBuffer);
+    if (keyRes) {
+      detectedKey = keyRes.key;
+      detectedScale = keyRes.scale;
+    }
+    detectedBpm = detectBPM(beatBuffer);
+    const analysis = analyzeAudioBuffer(beatBuffer);
+    beatSubBass = analysis.frequencyBalance.subBassEnergy;
+    beatMids = analysis.frequencyBalance.vocalPresenceEnergy;
+    beatAir = analysis.frequencyBalance.airBrightnessEnergy;
+  } else if (vocalBuffer) {
+    const keyRes = detectKeyAndScale(vocalBuffer);
+    if (keyRes) {
+      detectedKey = keyRes.key;
+      detectedScale = keyRes.scale;
+    }
+  }
+
+  // Classify Beat Vibe
+  if (beatSubBass > 42 && detectedBpm >= 130) {
+    beatVibe = 'Psychedelic Trap & 808 Heavy';
+  } else if (detectedBpm >= 115 && detectedBpm <= 128) {
+    beatVibe = 'Bouncy Modern Pop & Dance Groove';
+  } else if (detectedBpm >= 85 && detectedBpm <= 105) {
+    beatVibe = 'West Coast Hip-Hop & Hard Punch';
+  } else if (beatSubBass < 30 && beatAir > 40) {
+    beatVibe = 'Dream Pop & Acoustic Intimate';
+  } else {
+    beatVibe = 'Melodic Rap & Modern R&B';
+  }
+
+  // 2. Analyze Vocal buffer dynamics and timbre
+  let vocalTimbre = 'Dynamic Melodic Lead';
+  let vocalRmsDb = -20;
+  if (vocalBuffer) {
+    const vAnalysis = analyzeAudioBuffer(vocalBuffer);
+    vocalRmsDb = vAnalysis.rmsDb;
+    if (vAnalysis.crestFactorDb > 16) {
+      vocalTimbre = 'Intimate Dynamic Whisper';
+    } else if (vAnalysis.frequencyBalance.airBrightnessEnergy > 45) {
+      vocalTimbre = 'Bright High-Sheen Melodic';
+    } else if (vAnalysis.frequencyBalance.subBassEnergy > 30) {
+      vocalTimbre = 'Deep Chest Resonant Bars';
+    } else {
+      vocalTimbre = 'Aggressive Fast-Cadence Rap';
+    }
+  }
+
+  // 3. Match the best artist preset from our massive library
+  const candidatePresets = FACTORY_ARTIST_PRESETS;
+  let matchedPreset: ArtistVocalPreset | undefined;
+
+  if (beatVibe === 'West Coast Hip-Hop & Hard Punch') {
+    matchedPreset = candidatePresets.find(p => p.id === 'preset-kendrick-not-like-us') ||
+      candidatePresets.find(p => p.artist.toLowerCase().includes('kendrick')) ||
+      candidatePresets.find(p => p.artist.toLowerCase().includes('21 savage'));
+  } else if (beatVibe === 'Psychedelic Trap & 808 Heavy') {
+    matchedPreset = candidatePresets.find(p => p.id === 'preset-travis-fein') ||
+      candidatePresets.find(p => p.id === 'preset-carti-2024-baby-voice') ||
+      candidatePresets.find(p => p.artist.toLowerCase().includes('travis')) ||
+      candidatePresets.find(p => p.artist.toLowerCase().includes('future')) ||
+      candidatePresets.find(p => p.artist.toLowerCase().includes('yeat'));
+  } else if (beatVibe === 'Bouncy Modern Pop & Dance Groove') {
+    matchedPreset = candidatePresets.find(p => p.id === 'preset-weeknd-blinding-lights') ||
+      candidatePresets.find(p => p.id === 'preset-dualipa-levitating') ||
+      candidatePresets.find(p => p.id === 'preset-sabrina-espresso') ||
+      candidatePresets.find(p => p.artist.toLowerCase().includes('charli'));
+  } else if (beatVibe === 'Dream Pop & Acoustic Intimate') {
+    matchedPreset = candidatePresets.find(p => p.id === 'preset-billie-birds-feather') ||
+      candidatePresets.find(p => p.id === 'preset-taylor-cruel-summer') ||
+      candidatePresets.find(p => p.artist.toLowerCase().includes('billie'));
+  } else {
+    // Melodic Rap & Modern R&B
+    matchedPreset = candidatePresets.find(p => p.id === 'preset-juice-lucid-dreams') ||
+      candidatePresets.find(p => p.id === 'preset-uzi-xo-tour-llif3') ||
+      candidatePresets.find(p => p.id === 'preset-drake-rich-flex') ||
+      candidatePresets.find(p => p.id === 'preset-sza-kill-bill');
+  }
+
+  if (!matchedPreset) {
+    matchedPreset = candidatePresets[0];
+  }
+
+  // 4. Clone and Auto-Tune Preset to the Beat's Key & Scale
+  const tunedPreset: ArtistVocalPreset = {
+    ...matchedPreset,
+    tuning: {
+      ...matchedPreset.tuning,
+      key: detectedKey,
+      scale: detectedScale,
+    },
+  };
+
+  // 5. Compute Dynamic Frequency Pocket Carving
+  const carveFreqHz = vocalTimbre.includes('Whisper') ? 3200 : vocalTimbre.includes('Chest') ? 2200 : 2600;
+  const carveDepthDb = Math.min(5.5, Math.max(2.5, Math.round((beatMids / 100) * 5.0 * 10) / 10));
+  const sidechainDuckPercent = Math.min(30, Math.max(15, Math.round((beatSubBass / 100) * 28)));
+
+  // 6. Optimal Stem Loudness & Gain Ratio
+  const vocalVolume = vocalRmsDb < -24 ? 1.12 : 1.0;
+  const beatVolume = 0.88;
+
+  // 7. Apply directly to Live Audio Engine
+  audioEngine.updateTuningSettings(tunedPreset.tuning);
+  audioEngine.updateMicSettings(tunedPreset.mic);
+  audioEngine.updateDenoiseSettings({
+    ...tunedPreset.denoise,
+    autoGateMode: true,
+    gateHoldMs: 180,
+    gateReleaseMs: 160,
+  });
+  audioEngine.updateAlignSettings(tunedPreset.align);
+  audioEngine.updateModularPlugins(tunedPreset.plugins);
+  audioEngine.updateMasteringSettings({
+    ...tunedPreset.mastering,
+    enabled: true,
+    limiterCeiling: -0.1,
+  });
+  if (tunedPreset.pitchFormant) {
+    audioEngine.updatePitchFormantSettings(tunedPreset.pitchFormant, true);
+  }
+  if (tunedPreset.aiEnhancer) {
+    audioEngine.updateAIEnhancerSettings(tunedPreset.aiEnhancer);
+  }
+
+  // Set Synergy pocket carve & ducking in the beat
+  audioEngine.updateSynergySettings({
+    enabled: true,
+    detectedBeatBpm: detectedBpm,
+    carveDepthDb,
+    sidechainDucking: sidechainDuckPercent,
+    dynamicTransientLock: true,
+    aiPocketRideEnabled: true,
+    pocketAttunement: 92,
+  });
+
+  // Set Stem Gains
+  audioEngine.setVocalVolume(vocalVolume);
+  audioEngine.setBeatVolume(beatVolume);
+
+  // Apply master bus glue
+  applyAutoMixToLiveEngine(beatVibe.includes('Trap') ? 'fire_trap_master' : beatVibe.includes('Pop') ? 'club_banger_maximizer' : 'crystalline_modern_pop');
+
+  const summary = `AI Beat & Vocal Sync Applied: Matched [${tunedPreset.artist} - ${tunedPreset.name}]. Quantized pitch to [${detectedKey} ${detectedScale}] at ${detectedBpm} BPM. Carved ${carveDepthDb}dB pocket at ${carveFreqHz}Hz into the beat with ${sidechainDuckPercent}% sidechain ducking.`;
+
+  return {
+    matchedPreset: tunedPreset,
+    detectedKey,
+    detectedScale,
+    detectedBpm,
+    beatVibe,
+    vocalTimbre,
+    carveFreqHz,
+    carveDepthDb,
+    sidechainDuckPercent,
+    vocalVolume,
+    beatVolume,
+    loudnessTargetLufs: -8.0,
+    summary,
+    timestamp: Date.now(),
+  };
+}
+

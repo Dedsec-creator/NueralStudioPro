@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "NeuralTune Ultra - Vocal Studio DAW",
+  "short_name": "NeuralTune",
+  "description": "A high-clarity offline vocal studio DAW with live recording, dual-track stems, autotune, AI mastering, and modular DSP plugins.",
+  "theme_color": "#090d16",
+  "background_color": "#070a12",
+  "display": "standalone",
+  "orientation": "any",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

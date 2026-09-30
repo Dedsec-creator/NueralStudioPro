@@ -125,8 +125,18 @@ export async function launchGooglePicker(options: OpenGooglePickerOptions = {}):
     let activeToken = options.accessToken || getAccessToken();
     if (!activeToken) {
       onProgress?.(10, 'Authenticating with Google Drive...');
-      const authResult = await signInWithGoogle();
-      activeToken = authResult.accessToken;
+      try {
+        const authResult = await signInWithGoogle();
+        activeToken = authResult.accessToken;
+      } catch (authErr: any) {
+        if (authErr?.code === 'auth/popup-closed-by-user') {
+          onCancel?.();
+          return;
+        }
+        throw new Error(
+          authErr?.message || 'Google Drive authentication could not be completed in this browser sandbox. Please import audio stems directly from your device.'
+        );
+      }
     }
 
     if (!activeToken) {

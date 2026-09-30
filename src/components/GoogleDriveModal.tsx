@@ -121,9 +121,11 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
       setToken(res.accessToken);
       await loadFolderItems('root', undefined, res.accessToken);
     } catch (err: any) {
-      console.error(err);
+      console.warn('Google Drive sign-in notice:', err);
       if (err.code === 'auth/popup-closed-by-user') {
-        setErrorMsg('Sign-in cancelled. Please authorize Google Drive to continue.');
+        setErrorMsg('Sign-in cancelled. Please allow popups to connect Google Drive.');
+      } else if (err.code === 'auth/network-request-failed' || String(err.message).includes('network-request-failed')) {
+        setErrorMsg('Google Drive connection restricted in this browser environment. You can import audio stems directly from your device below.');
       } else {
         setErrorMsg(err.message || 'Failed to sign in with Google');
       }
@@ -319,11 +321,17 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
           onClose();
         },
         onError: (err) => {
-          setErrorMsg(err.message || 'Google Picker encountered an error.');
+          if (String(err.message).includes('network-request-failed')) {
+            setErrorMsg('Google Drive network connection restricted in this browser environment. You can import audio stems directly from your device below.');
+          } else {
+            setErrorMsg(err.message || 'Google Picker encountered an error.');
+          }
         },
       });
     } catch (err: any) {
-      if (err.code !== 'auth/popup-closed-by-user') {
+      if (String(err?.message).includes('network-request-failed')) {
+        setErrorMsg('Google Drive network connection restricted in this browser environment. You can import audio stems directly from your device below.');
+      } else if (err.code !== 'auth/popup-closed-by-user') {
         setErrorMsg(err.message || 'Could not launch Google Picker.');
       }
     } finally {
@@ -489,19 +497,45 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
           </div>
         </div>
 
-        {/* ERROR NOTIFICATION BANNER */}
+        {/* ERROR NOTIFICATION BANNER WITH DIRECT LOCAL STEM IMPORT FALLBACK */}
         {errorMsg && (
-          <div className="p-3 mx-4 mt-3 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-200 text-xs flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-              <span>{errorMsg}</span>
+          <div className="p-3 mx-4 mt-3 rounded-xl bg-rose-950/70 border border-rose-800/80 text-rose-200 text-xs flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+              <button
+                onClick={() => setErrorMsg(null)}
+                className="text-rose-400 hover:text-white text-xs font-bold px-1 cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
-            <button
-              onClick={() => setErrorMsg(null)}
-              className="text-rose-400 hover:text-white text-xs font-bold px-1"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-2 pt-1 border-t border-rose-900/60">
+              <label className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm">
+                <Music className="w-3.5 h-3.5" />
+                <span>Import Local Audio Stem File</span>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (targetTrack === 'vocal') {
+                      await audioEngine.loadVocalFile(file);
+                      onStemLoaded?.('vocal', file.name);
+                    } else {
+                      await audioEngine.loadBeatFile(file);
+                      onStemLoaded?.('beat', file.name);
+                    }
+                    onClose();
+                  }}
+                />
+              </label>
+              <span className="text-[11px] text-rose-300">WAV, MP3, FLAC, M4A supported</span>
+            </div>
           </div>
         )}
 

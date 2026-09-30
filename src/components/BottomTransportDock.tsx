@@ -37,6 +37,7 @@ interface BottomTransportDockProps {
   onToggleMic: () => void;
   onToggleRecord?: () => void;
   onOpenPitchFormant?: () => void;
+  onOpenAutoMix?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
   onUndo?: () => void;
@@ -58,6 +59,7 @@ export const BottomTransportDock: React.FC<BottomTransportDockProps> = ({
   onToggleMic,
   onToggleRecord,
   onOpenPitchFormant,
+  onOpenAutoMix,
   canUndo = false,
   canRedo = false,
   onUndo,
@@ -175,6 +177,19 @@ export const BottomTransportDock: React.FC<BottomTransportDockProps> = ({
             <Mic className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             <span className="hidden sm:inline">{isLiveMicActive ? 'LIVE' : 'MIC'}</span>
           </button>
+
+          {/* 1-Click Auto-Mix & Match Vocals to Beat */}
+          {onOpenAutoMix && (
+            <button
+              id="dock-btn-auto-mix"
+              onClick={onOpenAutoMix}
+              className="h-10 sm:h-8 px-3 sm:px-3 rounded-lg text-xs font-black bg-gradient-to-r from-amber-400 to-orange-500 hover:brightness-110 text-slate-950 border border-amber-300 shadow-md shadow-amber-500/20 transition cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95"
+              title="✨ 1-Click Auto-Mix & Auto-Preset: Syncs beat and vocals perfectly"
+            >
+              <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
+              <span>Auto-Mix</span>
+            </button>
+          )}
 
           {/* Skip Back Controls */}
           <div className="flex items-center gap-1">
