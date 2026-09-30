@@ -162,7 +162,7 @@ export const ModularPluginRack: React.FC<ModularPluginRackProps> = ({ plugins, o
                     <button
                       onClick={() => handleMovePlugin(index, 'up')}
                       disabled={index === 0}
-                      className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
+                      className="p-2 sm:p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
                       title="Move Up in Signal Flow"
                     >
                       <ArrowUp className="w-3.5 h-3.5" />
@@ -170,14 +170,14 @@ export const ModularPluginRack: React.FC<ModularPluginRackProps> = ({ plugins, o
                     <button
                       onClick={() => handleMovePlugin(index, 'down')}
                       disabled={index === plugins.length - 1}
-                      className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
+                      className="p-2 sm:p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
                       title="Move Down in Signal Flow"
                     >
                       <ArrowDown className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleRemovePlugin(index)}
-                      className="p-1 rounded text-slate-400 hover:text-red-400 hover:bg-slate-800 ml-1 cursor-pointer"
+                      className="p-2 sm:p-1 rounded text-slate-400 hover:text-red-400 hover:bg-slate-800 ml-1 cursor-pointer"
                       title="Remove Plugin"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -206,7 +206,7 @@ export const ModularPluginRack: React.FC<ModularPluginRackProps> = ({ plugins, o
                           value={currentVal}
                           disabled={!plugin.enabled}
                           onChange={e => handleParamChange(index, paramKey, Number(e.target.value))}
-                          className="w-full accent-violet-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                          className="w-full accent-violet-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
                         />
                       </div>
                     );

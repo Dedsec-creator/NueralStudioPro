@@ -26,13 +26,15 @@ import {
 
 interface LibrarySectionProps {
   onTracksChanged?: () => void;
+  onOpenGoogleDrive?: () => void;
 }
 
-export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged }) => {
+export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged, onOpenGoogleDrive }) => {
   const [assets, setAssets] = useState<LibraryAsset[]>(audioEngine.getLibraryAssets());
   const [activeTab, setActiveTab] = useState<'all' | 'imported' | 'renders'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [playingAssetId, setPlayingAssetId] = useState<string | null>(null);
+  const [previewErrorId, setPreviewErrorId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccessMessage, setExportSuccessMessage] = useState<string | null>(null);
   const [exportOptions, setExportOptions] = useState<RenderExportOptions>({
@@ -43,7 +45,6 @@ export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged 
   });
 
   const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputVocalRef = useRef<HTMLInputElement | null>(null);
   const fileInputBeatRef = useRef<HTMLInputElement | null>(null);
 
@@ -53,41 +54,28 @@ export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged 
     });
     return () => {
       unsubscribe();
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      audioEngine.stopLibraryAssetPreview();
     };
   }, []);
 
-  const handlePlayPreview = (asset: LibraryAsset) => {
+  const handlePlayPreview = async (asset: LibraryAsset) => {
     if (playingAssetId === asset.id) {
-      // Pause
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      audioEngine.stopLibraryAssetPreview();
       setPlayingAssetId(null);
       return;
     }
 
-    if (!asset.audioUrl && !asset.blob && asset.isFactoryDemo) {
-      // For factory demos, trigger engine playback
-      audioEngine.seek(0);
-      audioEngine.play();
-      setPlayingAssetId(asset.id);
-      return;
-    }
-
-    const src = asset.audioUrl || (asset.blob ? URL.createObjectURL(asset.blob) : '');
-    if (!src) return;
-
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
-      audioRef.current.onended = () => setPlayingAssetId(null);
-    }
-
-    audioRef.current.src = src;
-    audioRef.current.play().catch(console.error);
     setPlayingAssetId(asset.id);
+    setPreviewErrorId(null);
+    const started = await audioEngine.playLibraryAssetPreview(asset, () => {
+      setPlayingAssetId(null);
+    });
+
+    if (!started) {
+      setPlayingAssetId(null);
+      setPreviewErrorId(asset.id);
+      setTimeout(() => setPreviewErrorId(null), 4000);
+    }
   };
 
   const handleDownload = (asset: LibraryAsset) => {
@@ -99,32 +87,20 @@ export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged 
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } else if (asset.audioUrl && asset.audioUrl.startsWith('blob:')) {
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } else if (asset.audioUrl && (asset.audioUrl.startsWith('data:') || asset.audioUrl.startsWith('http'))) {
       const a = document.createElement('a');
       a.href = asset.audioUrl;
       a.download = asset.name;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-    } else {
-      // If no blob is cached (e.g. factory demo), bounce and download
-      audioEngine.renderOfflineBounce().then((res) => {
-        const url = URL.createObjectURL(res);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = asset.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }).catch(console.error);
     }
   };
 
   const handleDelete = (id: string) => {
-    if (playingAssetId === id && audioRef.current) {
-      audioRef.current.pause();
+    if (playingAssetId === id) {
+      audioEngine.stopLibraryAssetPreview();
       setPlayingAssetId(null);
     }
     audioEngine.deleteLibraryAsset(id);
@@ -132,10 +108,14 @@ export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged 
 
   const handleLoadIntoSession = async (asset: LibraryAsset, target: 'vocal' | 'beat') => {
     setLoadingTrackId(asset.id);
+    setPreviewErrorId(null);
     try {
       const success = await audioEngine.loadLibraryAssetIntoTrack(asset, target);
       if (success) {
         onTracksChanged?.();
+      } else {
+        setPreviewErrorId(asset.id);
+        setTimeout(() => setPreviewErrorId(null), 4000);
       }
     } finally {
       setLoadingTrackId(null);
@@ -222,18 +202,40 @@ export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged 
               ref={fileInputVocalRef}
               accept="audio/*"
               className="hidden"
-              onChange={(e) => handleImportFile(e, 'vocal')}
+              onChange={(e) => {
+                handleImportFile(e, 'vocal');
+                e.target.value = '';
+              }}
             />
             <input
               type="file"
               ref={fileInputBeatRef}
               accept="audio/*"
               className="hidden"
-              onChange={(e) => handleImportFile(e, 'beat')}
+              onChange={(e) => {
+                handleImportFile(e, 'beat');
+                e.target.value = '';
+              }}
             />
 
             <button
-              onClick={() => fileInputVocalRef.current?.click()}
+              onClick={onOpenGoogleDrive}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs font-bold border border-blue-500/40 transition cursor-pointer shadow-sm active:scale-95"
+              title="Import stems from Google Drive"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+                <path d="M8.27 3.5L1.5 15.2h6.77L15.04 3.5H8.27z" fill="#4285F4" />
+                <path d="M15.04 3.5L8.27 15.2l3.38 5.8 6.77-11.7-3.38-5.8z" fill="#0F9D58" />
+                <path d="M18.42 9.3l-3.38 5.9H1.5l3.38 5.8h13.54l3.38-5.8-3.38-5.9z" fill="#FFBA00" />
+              </svg>
+              <span>Google Drive</span>
+            </button>
+
+            <button
+              onClick={() => {
+                audioEngine.persistCurrentSession().catch(() => {});
+                fileInputVocalRef.current?.click();
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition cursor-pointer"
             >
               <Upload className="w-3.5 h-3.5 text-cyan-400" />
@@ -241,7 +243,10 @@ export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged 
             </button>
 
             <button
-              onClick={() => fileInputBeatRef.current?.click()}
+              onClick={() => {
+                audioEngine.persistCurrentSession().catch(() => {});
+                fileInputBeatRef.current?.click();
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition cursor-pointer"
             >
               <Upload className="w-3.5 h-3.5 text-amber-400" />
@@ -455,22 +460,36 @@ export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged 
                     </p>
                   )}
 
-                  {/* Mini waveform bars visualizer */}
-                  {asset.peaks && asset.peaks.length > 0 && (
-                    <div className="flex items-center gap-0.5 h-6 my-3 bg-slate-950/60 p-1 rounded-lg border border-slate-800/60">
-                      {asset.peaks.slice(0, 48).map((peak, idx) => (
+                  {/* Mini waveform bars visualizer (Studio DAW audio clip preview) */}
+                  <div className="relative flex items-center gap-[2px] h-8 my-3 bg-slate-950/80 px-2.5 py-1 rounded-xl border border-slate-800/80 overflow-hidden group">
+                    {((asset.peaks && asset.peaks.length > 0)
+                      ? asset.peaks.slice(0, 48)
+                      : Array.from({ length: 36 }, (_, i) => 20 + 55 * Math.abs(Math.sin(i * 0.28)))
+                    ).map((peak, idx) => {
+                      const rawVal = typeof peak === 'number' && Number.isFinite(peak) ? peak : 20;
+                      const pct = rawVal > 1 ? rawVal : rawVal * 100;
+                      const heightPct = Math.max(12, Math.min(100, Math.round(pct)));
+
+                      return (
                         <div
                           key={idx}
-                          className={`flex-1 rounded-full transition-all ${
-                            isPlaying ? 'bg-cyan-400' : 'bg-slate-700'
+                          className={`flex-1 rounded-full transition-all duration-150 ${
+                            isPlaying
+                              ? 'bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.7)]'
+                              : isRender
+                              ? 'bg-pink-500/40 group-hover:bg-pink-400/60'
+                              : isVocal
+                              ? 'bg-cyan-500/40 group-hover:bg-cyan-400/60'
+                              : 'bg-amber-500/40 group-hover:bg-amber-400/60'
                           }`}
                           style={{
-                            height: `${Math.max(15, peak * 100)}%`,
+                            height: `${heightPct}%`,
+                            maxHeight: '100%',
                           }}
                         />
-                      ))}
-                    </div>
-                  )}
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Card Action Buttons */}
@@ -523,6 +542,13 @@ export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged 
                     )}
                   </div>
                 </div>
+
+                {previewErrorId === asset.id && (
+                  <div className="mt-2 text-[11px] text-amber-300 font-mono flex items-center gap-1.5 bg-amber-500/10 px-2.5 py-1.5 rounded-lg border border-amber-500/30">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Audio buffer unavailable for this item. Re-import stem to play.</span>
+                  </div>
+                )}
               </div>
             );
           })}

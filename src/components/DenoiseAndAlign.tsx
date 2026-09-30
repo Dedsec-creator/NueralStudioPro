@@ -190,34 +190,168 @@ export const DenoiseAndAlign: React.FC<DenoiseAndAlignProps> = ({
               </div>
             </div>
 
-            {/* Micro-alignment offset slider */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-300">Transient Alignment Offset:</span>
-                <span className="font-mono text-cyan-400 font-bold">
-                  {synergySettings.alignOffsetMs > 0
-                    ? `+${synergySettings.alignOffsetMs} ms`
-                    : `${synergySettings.alignOffsetMs} ms`}
-                </span>
+            {/* Match Setting & Alignment Controls */}
+            <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3 shadow-inner">
+              {/* MATCH SETTING SLIDER (0% - 100%) */}
+              <div id="denoise-match-setting-group" className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="font-bold text-slate-100">Match Setting:</span>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      {synergySettings.alignmentConfidence === 100
+                        ? '★ 100% Beat-Vocal Lock'
+                        : 'Slide to make match 100%'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span
+                      id="denoise-match-setting-badge"
+                      className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded border transition ${
+                        synergySettings.alignmentConfidence === 100
+                          ? 'bg-emerald-950 text-emerald-300 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                          : synergySettings.alignmentConfidence >= 85
+                          ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/70'
+                          : synergySettings.alignmentConfidence >= 70
+                          ? 'bg-cyan-950/80 text-cyan-300 border-cyan-800/70'
+                          : 'bg-amber-950/80 text-amber-300 border-amber-800/70'
+                      }`}
+                    >
+                      {synergySettings.alignmentConfidence}% MATCH
+                    </span>
+
+                    <button
+                      id="btn-denoise-100-match"
+                      onClick={() => handleSynergyParam({ alignmentConfidence: 100, alignOffsetMs: 0 })}
+                      className={`px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer flex items-center gap-1 active:scale-95 ${
+                        synergySettings.alignmentConfidence === 100
+                          ? 'bg-emerald-500 text-slate-950 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
+                          : 'bg-slate-800 hover:bg-emerald-600 text-slate-200 hover:text-slate-950 border border-slate-700'
+                      }`}
+                      title="Snap match to 100%"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>100% Match</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* The Match Setting Slider */}
+                <div className="relative flex items-center py-1">
+                  <input
+                    id="slider-denoise-match-setting"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={synergySettings.alignmentConfidence}
+                    onChange={e => {
+                      const conf = Number(e.target.value);
+                      const offset = conf === 100 ? 0 : Math.round(((100 - conf) / 100) * 45);
+                      handleSynergyParam({ alignmentConfidence: conf, alignOffsetMs: offset });
+                    }}
+                    className="w-full accent-emerald-400 cursor-pointer h-2 bg-slate-800 rounded-lg appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-emerald-400 [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(52,211,153,0.8)] hover:[&::-webkit-slider-thumb]:scale-120 transition"
+                    title="Slide to make match up to 100%"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+                  <button onClick={() => handleSynergyParam({ alignmentConfidence: 0, alignOffsetMs: 45 })} className="hover:text-slate-300">0%</button>
+                  <button onClick={() => handleSynergyParam({ alignmentConfidence: 50, alignOffsetMs: 22 })} className="hover:text-slate-300">50% Groove</button>
+                  <button onClick={() => handleSynergyParam({ alignmentConfidence: 80, alignOffsetMs: 9 })} className="hover:text-cyan-400">80% Tight</button>
+                  <button onClick={() => handleSynergyParam({ alignmentConfidence: 100, alignOffsetMs: 0 })} className="text-emerald-400 font-bold hover:underline">100% Lock</button>
+                </div>
               </div>
-              <input
-                type="range"
-                min="-120"
-                max="120"
-                step="1"
-                value={synergySettings.alignOffsetMs}
-                onChange={e => handleSynergyParam({ alignOffsetMs: Number(e.target.value) })}
-                className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
-              />
-              <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
-                <span>-120 ms (Push Ahead)</span>
-                <button
-                  onClick={() => handleSynergyParam({ alignOffsetMs: 0 })}
-                  className="text-cyan-400 hover:underline cursor-pointer"
-                >
-                  Center (0ms)
-                </button>
-                <span>+120 ms (Pull Back)</span>
+
+              {/* BEAT TO VOCAL TIMING OFFSET CONTROLS */}
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-slate-200">Beat to Vocal Alignment:</span>
+                    <span className="text-[10px] font-mono text-cyan-400 font-bold bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800/60">
+                      {synergySettings.alignOffsetMs > 0
+                        ? `+${synergySettings.alignOffsetMs} ms`
+                        : `${synergySettings.alignOffsetMs} ms`}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    {synergySettings.alignOffsetMs < 0 ? 'Lead Beat' : synergySettings.alignOffsetMs > 0 ? 'Lag Beat' : 'On-Beat'}
+                  </span>
+                </div>
+
+                {/* Slider with center detent */}
+                <div className="relative flex items-center py-1">
+                  <div className="absolute left-1/2 -translate-x-1/2 w-0.5 h-3 bg-cyan-400/80 pointer-events-none z-10" />
+                  <input
+                    id="slider-denoise-align-offset"
+                    type="range"
+                    min="-150"
+                    max="150"
+                    step="1"
+                    value={synergySettings.alignOffsetMs || 0}
+                    onChange={e => {
+                      const offset = Number(e.target.value);
+                      const dist = Math.abs(offset);
+                      const conf = offset === 0 ? 100 : Math.max(15, Math.min(99, Math.round(100 - (dist / 150) * 65)));
+                      handleSynergyParam({ alignOffsetMs: offset, alignmentConfidence: conf });
+                    }}
+                    className="w-full accent-cyan-400 cursor-pointer h-2 bg-slate-800 rounded-lg appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-400 [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(34,211,238,0.7)] hover:[&::-webkit-slider-thumb]:scale-115 transition"
+                    title="Adjust beat to vocal alignment offset (-150ms to +150ms)"
+                  />
+                </div>
+
+                {/* Nudge & Preset Snap Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] font-mono text-slate-500">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleSynergyParam({ alignOffsetMs: (synergySettings.alignOffsetMs || 0) - 5 })}
+                      className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300 hover:text-white cursor-pointer"
+                      title="Nudge vocal 5ms earlier"
+                    >
+                      -5ms
+                    </button>
+                    <button
+                      onClick={() => handleSynergyParam({ alignOffsetMs: (synergySettings.alignOffsetMs || 0) + 5 })}
+                      className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300 hover:text-white cursor-pointer"
+                      title="Nudge vocal 5ms later"
+                    >
+                      +5ms
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleSynergyParam({ alignOffsetMs: -18 })}
+                      className={`px-1.5 py-0.5 rounded border transition cursor-pointer ${
+                        synergySettings.alignOffsetMs === -18 ? 'bg-cyan-500 text-slate-950 font-bold border-cyan-400' : 'border-slate-800 hover:text-white'
+                      }`}
+                      title="Drive (-18ms)"
+                    >
+                      Drive (-18ms)
+                    </button>
+                    <button
+                      onClick={() => handleSynergyParam({ alignOffsetMs: 0, alignmentConfidence: 100 })}
+                      className={`px-1.5 py-0.5 rounded border transition cursor-pointer ${
+                        synergySettings.alignOffsetMs === 0 ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-400' : 'border-slate-800 hover:text-white'
+                      }`}
+                      title="0ms Center Snap (100% Match)"
+                    >
+                      0ms Lock (100%)
+                    </button>
+                    <button
+                      onClick={() => handleSynergyParam({ alignOffsetMs: 22 })}
+                      className={`px-1.5 py-0.5 rounded border transition cursor-pointer ${
+                        synergySettings.alignOffsetMs === 22 ? 'bg-cyan-500 text-slate-950 font-bold border-cyan-400' : 'border-slate-800 hover:text-white'
+                      }`}
+                      title="Laid-Back (+22ms)"
+                    >
+                      Laid-Back (+22ms)
+                    </button>
+                  </div>
+
+                  <span>+150 ms</span>
+                </div>
               </div>
             </div>
 
@@ -233,7 +367,7 @@ export const DenoiseAndAlign: React.FC<DenoiseAndAlignProps> = ({
                 max="100"
                 value={synergySettings.transientSensitivity}
                 onChange={e => handleSynergyParam({ transientSensitivity: Number(e.target.value) })}
-                className="w-full accent-amber-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                className="w-full accent-amber-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
               />
             </div>
           </div>
@@ -253,7 +387,7 @@ export const DenoiseAndAlign: React.FC<DenoiseAndAlignProps> = ({
                 step="0.5"
                 value={synergySettings.carveDepthDb}
                 onChange={e => handleSynergyParam({ carveDepthDb: Number(e.target.value) })}
-                className="w-full accent-emerald-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                className="w-full accent-emerald-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
               />
               <p className="text-[10px] text-slate-400 mt-1">
                 Dynamically notches 2.5kHz in the beat when vocals sing, preventing frequency masking and mud.
@@ -272,7 +406,7 @@ export const DenoiseAndAlign: React.FC<DenoiseAndAlignProps> = ({
                 max="50"
                 value={synergySettings.sidechainDucking}
                 onChange={e => handleSynergyParam({ sidechainDucking: Number(e.target.value) })}
-                className="w-full accent-indigo-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                className="w-full accent-indigo-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
               />
               <p className="text-[10px] text-slate-400 mt-1">
                 Subtly attenuates the instrumental stem during vocal phrases for instant modern radio clarity.
@@ -318,7 +452,7 @@ export const DenoiseAndAlign: React.FC<DenoiseAndAlignProps> = ({
                   step="1"
                   value={synergySettings.pocketAttunement ?? 85}
                   onChange={e => handleSynergyParam({ pocketAttunement: Number(e.target.value) })}
-                  className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                  className="w-full accent-cyan-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
                 />
                 <div className="flex justify-between text-[9px] font-mono text-slate-500 mt-0.5">
                   <span>Natural Float (20%)</span>
@@ -341,7 +475,7 @@ export const DenoiseAndAlign: React.FC<DenoiseAndAlignProps> = ({
                   step="1"
                   value={synergySettings.grooveSwing ?? 0}
                   onChange={e => handleSynergyParam({ grooveSwing: Number(e.target.value) })}
-                  className="w-full accent-amber-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                  className="w-full accent-amber-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
                 />
                 <div className="flex justify-between text-[9px] font-mono text-slate-500 mt-0.5">
                   <span>Push Hard (-30%)</span>
@@ -512,7 +646,7 @@ export const DenoiseAndAlign: React.FC<DenoiseAndAlignProps> = ({
                   onChange={e =>
                     onDenoiseChange({ ...denoiseSettings, harshSuppression: Number(e.target.value) })
                   }
-                  className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                  className="w-full accent-cyan-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
                 />
                 <p className="text-[10px] text-slate-400 mt-0.5">
                   Suppresses piercing vocal sibilance, mic diaphragm harshness, and harsh room reflections.
@@ -532,7 +666,7 @@ export const DenoiseAndAlign: React.FC<DenoiseAndAlignProps> = ({
                     max="36"
                     value={denoiseSettings.reduction}
                     onChange={e => onDenoiseChange({ ...denoiseSettings, reduction: Number(e.target.value) })}
-                    className="w-full accent-emerald-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                    className="w-full accent-emerald-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
                   />
                 </div>
 
@@ -552,7 +686,7 @@ export const DenoiseAndAlign: React.FC<DenoiseAndAlignProps> = ({
                     onChange={e =>
                       onDenoiseChange({ ...denoiseSettings, gateReleaseMs: Number(e.target.value) })
                     }
-                    className="w-full accent-emerald-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                    className="w-full accent-emerald-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
                   />
                 </div>
               </div>
@@ -691,7 +825,7 @@ export const DenoiseAndAlign: React.FC<DenoiseAndAlignProps> = ({
                   step="0.5"
                   value={alignSettings.delayMs}
                   onChange={e => onAlignChange({ ...alignSettings, delayMs: Number(e.target.value) })}
-                  className="w-full accent-indigo-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                  className="w-full accent-indigo-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
                 />
                 <div className="flex justify-between text-[10px] font-mono text-slate-400 mt-1">
                   <span>-50 ms Pre</span>

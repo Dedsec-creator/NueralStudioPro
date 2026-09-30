@@ -143,7 +143,7 @@ export const MicLocker: React.FC<MicLockerProps> = ({ settings, onChange }) => {
               max="10"
               value={settings.proximity}
               onChange={e => onChange({ ...settings, proximity: Number(e.target.value) })}
-              className="w-full accent-amber-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+              className="w-full accent-amber-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
             />
           </div>
 
@@ -162,7 +162,7 @@ export const MicLocker: React.FC<MicLockerProps> = ({ settings, onChange }) => {
               max="100"
               value={settings.drive}
               onChange={e => onChange({ ...settings, drive: Number(e.target.value) })}
-              className="w-full accent-amber-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+              className="w-full accent-amber-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
             />
           </div>
 
@@ -182,7 +182,7 @@ export const MicLocker: React.FC<MicLockerProps> = ({ settings, onChange }) => {
               step="0.5"
               value={settings.airBoost}
               onChange={e => onChange({ ...settings, airBoost: Number(e.target.value) })}
-              className="w-full accent-amber-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+              className="w-full accent-amber-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
             />
           </div>
 

@@ -484,7 +484,7 @@ export const AIEnhancer: React.FC<AIEnhancerProps> = ({ settings, onChange }) =>
                 max="100"
                 value={settings.intensity}
                 onChange={e => handleParamChange({ intensity: Number(e.target.value) })}
-                className="w-full accent-cyan-400 cursor-pointer h-2 bg-slate-800 rounded-lg"
+                className="w-full accent-cyan-400 cursor-pointer h-5 sm:h-2 bg-slate-800 rounded-lg"
               />
               <p className="text-[10px] text-slate-400 mt-1.5">
                 Dry/Wet neural blending of the entire enhancement chain without phase cancellation.
@@ -571,7 +571,7 @@ export const AIEnhancer: React.FC<AIEnhancerProps> = ({ settings, onChange }) =>
                 max="100"
                 value={settings.clarityPresence}
                 onChange={e => handleParamChange({ clarityPresence: Number(e.target.value) })}
-                className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                className="w-full accent-cyan-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
               />
               <p className="text-[10px] text-slate-400 mt-0.5">
                 Pushes consonant articulation forward in the mix without adding megaphone boxiness.
@@ -592,7 +592,7 @@ export const AIEnhancer: React.FC<AIEnhancerProps> = ({ settings, onChange }) =>
                 max="100"
                 value={settings.airBrilliance}
                 onChange={e => handleParamChange({ airBrilliance: Number(e.target.value) })}
-                className="w-full accent-pink-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                className="w-full accent-pink-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
               />
               <p className="text-[10px] text-slate-400 mt-0.5">
                 Adds expensive condenser microphone sparkle and open top-end breath.
@@ -618,7 +618,7 @@ export const AIEnhancer: React.FC<AIEnhancerProps> = ({ settings, onChange }) =>
                 max="100"
                 value={settings.harshnessTamer}
                 onChange={e => handleParamChange({ harshnessTamer: Number(e.target.value) })}
-                className="w-full accent-rose-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                className="w-full accent-rose-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
               />
               <p className="text-[10px] text-slate-400 mt-0.5">
                 Automatically detects piercing resonances and clamps ear-fatiguing frequency spikes.
@@ -637,7 +637,7 @@ export const AIEnhancer: React.FC<AIEnhancerProps> = ({ settings, onChange }) =>
                 max="100"
                 value={settings.warmthBody}
                 onChange={e => handleParamChange({ warmthBody: Number(e.target.value) })}
-                className="w-full accent-amber-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                className="w-full accent-amber-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
               />
               <p className="text-[10px] text-slate-400 mt-0.5">
                 Lifts lower chest fundamental weight for thin or distant recordings.
@@ -658,7 +658,7 @@ export const AIEnhancer: React.FC<AIEnhancerProps> = ({ settings, onChange }) =>
                 max="100"
                 value={settings.deMud}
                 onChange={e => handleParamChange({ deMud: Number(e.target.value) })}
-                className="w-full accent-indigo-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                className="w-full accent-indigo-400 cursor-pointer h-5 sm:h-1.5 bg-slate-800 rounded-lg"
               />
               <p className="text-[10px] text-slate-400 mt-0.5">
                 Notches out untreated bedroom acoustics, hollow cardboard reflections, and muddy standing waves.

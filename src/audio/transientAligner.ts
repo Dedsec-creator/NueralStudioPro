@@ -207,9 +207,9 @@ export function calculateSynergyAlignment(
 
   const numVocal = Math.max(1, vocalTransients.length);
   const avgDevMs = Math.round(totalDevMs / numVocal);
-  const pocketTightness = Math.min(99, Math.max(60, Math.round((matchedHits / numVocal) * 100)));
-  const grooveScore = Math.min(99, Math.max(72, Math.round(100 - avgDevMs * 0.65 + (pocketAttunement * 0.1))));
-  const syncopationIndex = Math.min(95, Math.max(45, Math.round(70 + (grooveSwing * 0.3) + (matchedHits % 15))));
+  const pocketTightness = Math.min(100, Math.max(60, Math.round((matchedHits / numVocal) * 100)));
+  const grooveScore = Math.min(100, Math.max(72, Math.round(100 - avgDevMs * 0.65 + (pocketAttunement * 0.1))));
+  const syncopationIndex = Math.min(100, Math.max(45, Math.round(70 + (grooveSwing * 0.3) + (matchedHits % 15))));
 
   // Diagnosis text describing the alignment
   const diagnosis = `AI Pocket Attunement: Locked ${matchedHits}/${numVocal} vocal transient syllables onto beat groove accents at ${beatBpm} BPM (${pocketTightness}% pocket tightness, ${avgDevMs}ms avg micro-deviation). Applied ${style.replace('_', ' ')} offset of ${finalOffsetMs > 0 ? `+${finalOffsetMs}` : finalOffsetMs}ms with ${pocketAttunement}% attunement.`;
@@ -239,7 +239,7 @@ export function calculateSynergyAlignment(
   };
 
   const baseConfidence = vocalTransients.length > 0
-    ? Math.min(99, Math.max(80, Math.round(grooveScore)))
+    ? Math.min(100, Math.max(80, Math.round(grooveScore)))
     : 85;
 
   return {
@@ -249,5 +249,55 @@ export function calculateSynergyAlignment(
     beatTransients,
     vocalTransients,
     aiAttuneReport,
+  };
+}
+
+export function evaluateManualAlignmentMatch(
+  offsetMs: number,
+  beatTransients: number[],
+  vocalTransients: number[],
+  beatBpm: number = 128
+): { confidence: number; pocketTightness: number; avgDevMs: number } {
+  if (!vocalTransients || vocalTransients.length === 0 || !beatTransients || beatTransients.length === 0) {
+    // If no transients are loaded yet, evaluate closeness to 16th note grid
+    const sixteenthMs = ((60 / Math.max(60, beatBpm)) / 4) * 1000;
+    const gridDist = Math.abs(offsetMs % sixteenthMs);
+    const minGridDist = Math.min(gridDist, sixteenthMs - gridDist);
+    const conf = Math.max(55, Math.min(100, Math.round(100 - (minGridDist / (sixteenthMs / 2)) * 40)));
+    return {
+      confidence: conf,
+      pocketTightness: conf,
+      avgDevMs: Math.round(minGridDist),
+    };
+  }
+
+  const offsetSec = offsetMs / 1000;
+  let matchedHits = 0;
+  let totalDevMs = 0;
+
+  for (const vTime of vocalTransients) {
+    const alignedTime = vTime + offsetSec;
+    let minDiffSec = Infinity;
+    for (const bTime of beatTransients) {
+      const d = Math.abs(alignedTime - bTime);
+      if (d < minDiffSec) minDiffSec = d;
+    }
+    const devMs = minDiffSec * 1000;
+    totalDevMs += Math.min(120, devMs);
+    if (devMs <= 35) {
+      matchedHits++;
+    }
+  }
+
+  const numVocal = Math.max(1, vocalTransients.length);
+  const avgDevMs = Math.round(totalDevMs / numVocal);
+  const pocketTightness = Math.min(100, Math.max(45, Math.round((matchedHits / numVocal) * 100)));
+  const rawConf = Math.round(100 - avgDevMs * 0.55);
+  const confidence = Math.min(100, Math.max(50, rawConf));
+
+  return {
+    confidence,
+    pocketTightness,
+    avgDevMs,
   };
 }

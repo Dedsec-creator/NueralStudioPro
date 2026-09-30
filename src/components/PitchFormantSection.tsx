@@ -388,7 +388,7 @@ export const PitchFormantSection: React.FC<PitchFormantSectionProps> = ({
               step="1"
               value={settings.pitchSemitones}
               onChange={e => update({ pitchSemitones: parseInt(e.target.value, 10) })}
-              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+              className="w-full h-5 sm:h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
             />
             <div className="flex justify-between text-[10px] font-mono text-slate-500">
               <span>-12st (-1 Oct)</span>
@@ -444,7 +444,7 @@ export const PitchFormantSection: React.FC<PitchFormantSectionProps> = ({
               step="1"
               value={settings.fineTuneCents}
               onChange={e => update({ fineTuneCents: parseInt(e.target.value, 10) })}
-              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+              className="w-full h-5 sm:h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
             />
             <div className="flex justify-between text-[10px] font-mono text-slate-500">
               <span>-100 cents</span>
@@ -503,7 +503,7 @@ export const PitchFormantSection: React.FC<PitchFormantSectionProps> = ({
               step="0.5"
               value={settings.formantSemitones}
               onChange={e => update({ formantSemitones: parseFloat(e.target.value) })}
-              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+              className="w-full h-5 sm:h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
             />
             <div className="flex justify-between text-[10px] font-mono text-slate-500">
               <span>-12st (Deep Chest)</span>
@@ -538,7 +538,7 @@ export const PitchFormantSection: React.FC<PitchFormantSectionProps> = ({
               step="0.01"
               value={settings.throatLength}
               onChange={e => update({ throatLength: parseFloat(e.target.value) })}
-              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+              className="w-full h-5 sm:h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
             />
           </div>
 
@@ -557,8 +557,98 @@ export const PitchFormantSection: React.FC<PitchFormantSectionProps> = ({
               step="1"
               value={settings.formantIntensity}
               onChange={e => update({ formantIntensity: parseInt(e.target.value, 10) })}
-              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+              className="w-full h-5 sm:h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
             />
+          </div>
+
+          {/* ML Formant (ML F) Neural Tracking Engine */}
+          <div className="space-y-3 pt-3 border-t border-slate-800 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                <span className="text-xs font-bold text-white tracking-wide">ML Formant Engine (ML F)</span>
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                  NEURAL VOWEL
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => update({ mlFormantEnabled: !(settings.mlFormantEnabled ?? true) })}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  (settings.mlFormantEnabled ?? true)
+                    ? 'bg-cyan-500 text-slate-950 shadow-sm shadow-cyan-500/30'
+                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>{(settings.mlFormantEnabled ?? true) ? 'ML F: ACTIVE' : 'ML F: BYPASSED'}</span>
+              </button>
+            </div>
+
+            {(settings.mlFormantEnabled ?? true) && (
+              <div className="space-y-3 pt-1 animate-fade-in">
+                {/* ML Model Selector */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {(
+                    [
+                      { id: 'neural_vowel', label: 'Neural Vowel', desc: 'Natural Polish' },
+                      { id: 'transformer_formant', label: 'Transformer', desc: 'Yeat & Carti High' },
+                      { id: 'deep_timbre', label: 'Deep Timbre', desc: 'Travis Chest' },
+                      { id: 'spectral_morph', label: 'Spectral Morph', desc: 'Futuristic' },
+                    ] as const
+                  ).map(mod => {
+                    const active = (settings.mlFormantModel || 'neural_vowel') === mod.id;
+                    return (
+                      <button
+                        key={mod.id}
+                        type="button"
+                        onClick={() => update({ mlFormantModel: mod.id })}
+                        className={`p-2 rounded-lg text-left border transition cursor-pointer ${
+                          active
+                            ? 'bg-cyan-500/20 border-cyan-500/60 text-cyan-300'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <div className="text-[11px] font-bold leading-none mb-1">{mod.label}</div>
+                        <div className="text-[9px] text-slate-500 truncate">{mod.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* ML Clamping & Warmth */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400">ML Formant Clamping (Anti-Harsh)</span>
+                      <span className="font-mono font-bold text-cyan-400">{settings.mlFormantClamping ?? 75}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={settings.mlFormantClamping ?? 75}
+                      onChange={e => update({ mlFormantClamping: parseInt(e.target.value, 10) })}
+                      className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400">Neural Harmonic Warmth</span>
+                      <span className="font-mono font-bold text-amber-400">{settings.mlFormantWarmth ?? 60}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={settings.mlFormantWarmth ?? 60}
+                      onChange={e => update({ mlFormantWarmth: parseInt(e.target.value, 10) })}
+                      className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Formant EQ Band Trim (F1, F2, F3) */}

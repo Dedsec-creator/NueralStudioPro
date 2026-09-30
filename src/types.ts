@@ -42,6 +42,10 @@ export interface MicModel {
   eqCurve: { freq: number; gain: number; q: number }[];
 }
 
+export type TuningMode = 'hard_snap' | 'modern_trap' | 'natural_flex' | 'hyper_yeat' | 'robotic';
+export type DoublerMode = 'stereo_wide' | 'octave_down' | 'octave_up' | 'fifth_harmony' | 'detuned_thick';
+export type StutterRate = '1/4' | '1/8' | '1/16' | '1/32' | 'triplet';
+
 export interface TuningSettings {
   enabled: boolean;
   retuneSpeed: number; // 0ms (hard robot) to 100ms (slow transparent)
@@ -52,6 +56,20 @@ export interface TuningSettings {
   naturalVibrato: number; // 0 - 100%
   vibratoRate: number; // 4 - 8 Hz
   trackingSensitivity: number; // 0 - 100%
+  tuningMode?: TuningMode;
+  formantCorrection?: boolean;
+  throatLength?: number; // 0.6 - 1.4 (1.0 = neutral)
+  bypassedNotes?: string[]; // notes disabled in the scale
+  // Vocal Doubler & Harmonizer
+  doublerEnabled?: boolean;
+  doublerMode?: DoublerMode;
+  doublerMix?: number; // 0 - 100%
+  // Yeat / Trap Stutter & Bell Gate FX
+  stutterEnabled?: boolean;
+  stutterRate?: StutterRate;
+  stutterMix?: number; // 0 - 100%
+  bellResonatorEnabled?: boolean;
+  bellResonanceHz?: number; // 2500 - 6000 Hz
 }
 
 export interface MicLockerSettings {
@@ -117,7 +135,21 @@ export interface AutoAlignSettings {
   correlation: number; // -1 to +1
 }
 
-export type PluginType = 'parametric_eq' | 'tube_drive' | 'vintage_delay' | 'plate_reverb' | 'vocal_chorus' | 'de_esser';
+export type PluginType = 
+  | 'parametric_eq' 
+  | 'tube_drive' 
+  | 'vintage_delay' 
+  | 'plate_reverb' 
+  | 'vocal_chorus' 
+  | 'de_esser'
+  | 'ott_compressor'
+  | 'sub_808_enhancer'
+  | 'hard_clipper'
+  | 'dimension_widener'
+  | 'transient_shaper'
+  | 'tape_warble_lofi'
+  | 'flanger_phaser'
+  | 'spectral_gate';
 
 export interface ModularPlugin {
   id: string;
@@ -125,6 +157,114 @@ export interface ModularPlugin {
   name: string;
   enabled: boolean;
   params: Record<string, number>;
+}
+
+export type AutoMixPresetId = 
+  | 'fire_trap_master'
+  | 'distorted_808_overload'
+  | 'psychedelic_spaced_out'
+  | 'yeat_rage_overkill'
+  | 'carti_hyper_vamp'
+  | 'travis_astroworld_heat'
+  | 'metro_boomin_dark_boom'
+  | 'club_banger_maximizer'
+  | 'lofi_tape_crunch'
+  | 'crystalline_modern_pop';
+
+export interface AutoMixFrequencyBalance {
+  subBassEnergy: number; // 20 - 80 Hz percentage (0 - 100)
+  lowMidEnergy: number; // 80 - 450 Hz percentage (0 - 100)
+  vocalPresenceEnergy: number; // 1 - 4.5 kHz percentage (0 - 100)
+  airBrightnessEnergy: number; // 8 - 20 kHz percentage (0 - 100)
+  subBass?: number; // 0.0 - 1.0 fraction
+  lowMids?: number; // 0.0 - 1.0 fraction
+  vocalPresence?: number; // 0.0 - 1.0 fraction
+  airSheen?: number; // 0.0 - 1.0 fraction
+}
+
+export interface AutoMixAnalysis {
+  peakDb: number;
+  peakLeftDb: number;
+  peakRightDb: number;
+  rmsDb: number;
+  lufs: number;
+  integratedLufs?: number;
+  crestFactorDb: number;
+  stereoCorrelation?: number;
+  frequencyBalance: AutoMixFrequencyBalance;
+}
+
+export interface AutoMixPresetDefinition {
+  id: AutoMixPresetId;
+  name: string;
+  tagline: string;
+  category: 'Trap & Drill' | 'Psychedelic & Space' | 'Hard Distortion' | 'Modern Pop' | 'Vintage Lo-Fi';
+  targetLufs: number; // e.g. -6.5 LUFS
+  description: string;
+  glowColor: string;
+  accentHex: string;
+  badge: string;
+  // Multi-band compressor parameters
+  multiband: {
+    lowThreshold: number; // dB
+    lowRatio: number;
+    lowAttack: number; // sec
+    lowRelease: number; // sec
+    midThreshold: number;
+    midRatio: number;
+    midAttack: number;
+    midRelease: number;
+    highThreshold: number;
+    highRatio: number;
+    highAttack: number;
+    highRelease: number;
+  };
+  // Dynamic glue EQ
+  eq: {
+    subBassFreq: number; // Hz
+    subBassGain: number; // dB
+    deMudFreq: number; // Hz
+    deMudGain: number; // dB (negative notch)
+    vocalPresenceFreq: number; // Hz
+    vocalPresenceGain: number; // dB
+    airSheenFreq: number; // Hz
+    airSheenGain: number; // dB
+  };
+  // Saturation & drive
+  saturation: {
+    type: 'tube' | 'tape' | 'hard_clipper' | 'diode_overdrive';
+    driveAmount: number; // 0 - 100%
+    warmth: number; // 0 - 100%
+    mix: number; // 0 - 100%
+  };
+  // Stereo dimension & 808 mono lock
+  stereo: {
+    width: number; // 50 - 250%
+    monoSubCutoff: number; // Hz (usually 120Hz)
+    haasDelayMs: number;
+  };
+  // Brickwall ceiling limiter
+  limiter: {
+    ceilingDb: number; // e.g. -0.1 dB
+    preGainDb: number; // drive into limiter (0 - 12 dB)
+    lookaheadMs: number;
+    releaseMs: number;
+  };
+}
+
+export interface AutoMixResult {
+  presetId: AutoMixPresetId;
+  presetName: string;
+  preset?: AutoMixPresetDefinition;
+  targetLufsDb?: number;
+  inputAnalysis: AutoMixAnalysis;
+  outputAnalysis: AutoMixAnalysis;
+  lufsBoostDb: number;
+  loudnessGainDb: number;
+  rmsBoostDb: number;
+  diagnosis: string;
+  masteredBuffer?: AudioBuffer;
+  timestamp: number;
 }
 
 export interface MasteringSettings {
@@ -167,6 +307,14 @@ export interface PitchFormantSettings {
   f2GainDb: number; // mid formant resonance (-6 to +6 dB)
   f3GainDb: number; // high formant shimmer (-6 to +6 dB)
   isBypassed: boolean;
+  // ML Formant & Neural Vowel Tracking (ML F)
+  mlFormantEnabled?: boolean;
+  mlFormantModel?: 'neural_vowel' | 'transformer_formant' | 'deep_timbre' | 'spectral_morph';
+  mlFormantTrackingSpeed?: number; // 0 to 100%
+  mlFormantClamping?: number; // 0 to 100% (prevents formant screech)
+  mlFormantWarmth?: number; // 0 to 100% (harmonic fullness)
+  mlVowelPreserve?: boolean; // preserves natural vowel envelope
+  mlFormantAirSheen?: number; // 0 to 100% (ultra-high sheen)
 }
 
 export type PocketRideStyle = 'pocket_lock' | 'ahead_drive' | 'laid_back' | 'triplet_bounce' | 'pop_tight' | 'manual';
@@ -214,7 +362,17 @@ export interface AlignmentAnalysisResult {
   aiAttuneReport?: AIPocketAttuneReport;
 }
 
-export type LibraryAssetType = 'imported_vocal' | 'imported_beat' | 'rendered_master' | 'rendered_vocal' | 'rendered_beat';
+export type LibraryAssetType = 'imported_vocal' | 'imported_beat' | 'rendered_master' | 'rendered_vocal' | 'rendered_beat' | 'recorded_vocal';
+
+export interface RecordingStatus {
+  isRecording: boolean;
+  isCountingIn: boolean;
+  countInNumber: number; // 3, 2, 1, 0
+  duration: number; // in seconds
+  inputLevel: number; // 0 to 100%
+  liveMonitoring: boolean; // whether mic is monitored through speakers/headphones
+  takeNumber: number;
+}
 
 export interface LibraryAsset {
   id: string;
@@ -235,9 +393,45 @@ export interface LibraryAsset {
 
 export interface RenderExportOptions {
   stemSelection: 'master' | 'vocal_only' | 'beat_only';
-  format: 'wav_24bit' | 'wav_16bit';
-  sampleRate: 44100 | 48000;
+  format: 'wav_24bit' | 'wav_16bit' | 'wav_32float' | 'mp3_320';
+  sampleRate: 44100 | 48000 | 96000;
   customFileName?: string;
+  renderSpeed?: 'draft_fast' | 'balanced_studio' | 'audiophile_offline';
+}
+
+export type AppThemeId =
+  | 'cyber_midnight'
+  | 'high_contrast'
+  | 'oled_black'
+  | 'neon_cyberpunk'
+  | 'studio_gold'
+  | 'slate_producer';
+
+export type ExportQualityId = 'wav_16bit' | 'wav_24bit' | 'wav_32float' | 'mp3_320';
+export type RenderSpeedId = 'draft_fast' | 'balanced_studio' | 'audiophile_offline';
+export type SampleRateId = 44100 | 48000 | 96000;
+
+export type PresetWallpaperId =
+  | 'none'
+  | 'abbey_road'
+  | 'cyberpunk_studio'
+  | 'wood_acoustic'
+  | 'analog_ssl'
+  | 'deep_space'
+  | 'dark_waveform';
+
+export interface StudioSettings {
+  theme: AppThemeId;
+  backgroundType: 'none' | 'preset' | 'custom';
+  presetWallpaper: PresetWallpaperId;
+  customWallpaperUrl: string | null;
+  wallpaperOpacity: number; // 0.1 to 1.0
+  wallpaperBlur: number; // 0 to 30 px
+  exportQuality: ExportQualityId;
+  sampleRate: SampleRateId;
+  renderSpeed: RenderSpeedId;
+  defaultAutoMixPreset: string; // AutoMixPresetId
+  defaultAutoMixStem: 'full_mix' | 'vocal' | 'beat';
 }
 
 export interface ArtistVocalPreset {
@@ -284,3 +478,111 @@ export interface AudioMetrics {
   bufferSize: number;
   dspLoadPercent: number;
 }
+
+export interface HistoryStudioState {
+  tuningSettings: TuningSettings;
+  micSettings: MicLockerSettings;
+  denoiseSettings: DenoiseSettings;
+  alignSettings: AutoAlignSettings;
+  plugins: ModularPlugin[];
+  masteringSettings: MasteringSettings;
+  pitchFormantSettings: PitchFormantSettings;
+  aiEnhancerSettings: ProVocalAIEnhancerSettings;
+  activePresetId?: string;
+  activePresetName?: string;
+}
+
+export interface HistorySnapshot {
+  id: string;
+  timestamp: number;
+  label: string;
+  state: HistoryStudioState;
+}
+
+export interface AutoSaveStatus {
+  enabled: boolean;
+  intervalSeconds: number;
+  lastSaved: number | null;
+  secondsSinceLastSave: number;
+  secondsUntilNextSave: number;
+  isSaving: boolean;
+  snapshotCount: number;
+  lastError: string | null;
+}
+
+export interface ActiveProjectSession {
+  id: 'current_session';
+  lastSaved: number;
+  bpm: number;
+  vocalTrackInfo: TrackStemInfo;
+  beatTrackInfo: TrackStemInfo;
+  vocalBlob?: Blob;
+  beatBlob?: Blob;
+  vocalAssetId?: string;
+  beatAssetId?: string;
+  tuningSettings: TuningSettings;
+  micSettings: MicLockerSettings;
+  denoiseSettings: DenoiseSettings;
+  alignSettings: AutoAlignSettings;
+  plugins: ModularPlugin[];
+  masteringSettings: MasteringSettings;
+  pitchFormantSettings: PitchFormantSettings;
+  aiEnhancerSettings: ProVocalAIEnhancerSettings;
+  synergySettings: SynergyPocketSettings;
+  activePresetId?: string;
+  snapshots?: HistorySnapshot[];
+  redoSnapshots?: HistorySnapshot[];
+  snapshotCount?: number;
+  autoSaved?: boolean;
+}
+
+export interface DatabaseStorageStats {
+  assetCount: number;
+  uploadCount: number;
+  renderCount: number;
+  recordCount: number;
+  totalBytes: number;
+  hasActiveSession: boolean;
+  snapshotCount: number;
+  lastAutoSaveTime: number | null;
+}
+
+export type PerformanceProfileId =
+  | 'turbo_low_latency'
+  | 'balanced_studio'
+  | 'eco_saver'
+  | 'glitch_proof';
+
+export interface PerformanceConfig {
+  profile: PerformanceProfileId;
+  bufferSize: 128 | 256 | 512 | 1024;
+  visualizerFps: 60 | 30 | 15;
+  smartDspSleep: boolean;
+  progressiveLoading: boolean;
+  autoGlitchMitigation: boolean;
+  maxMemoryCacheMb: number;
+  enableOffscreenPeaks: boolean;
+}
+
+export interface PerformanceTelemetry {
+  dspLoadPercent: number;
+  latencyMs: number;
+  audioRamUsageMb: number;
+  activeBuffersCount: number;
+  cachedBuffersCount: number;
+  glitchCount: number;
+  lastGlitchTime?: number;
+  storageUsageMb: number;
+  fps: number;
+  status: 'optimal' | 'nominal' | 'strained' | 'throttling';
+  sampleRate: number;
+  bufferSize: number;
+}
+
+export interface CachePurgeResult {
+  freedBytes: number;
+  freedMb: number;
+  remainingMb: number;
+  purgedBufferCount: number;
+}
+

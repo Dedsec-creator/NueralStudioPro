@@ -1,6 +1,6 @@
 {
   "name": "NeuralTune Ultra",
-  "description": "A high-clarity vocal studio DAW with dual-track vocal & beat stems, Auto Noise Gate & De-Harsh, Pro Vocal AI Enhancer, synergistic transient alignment, real-time pitch correction, Antares-style tuning dial, mic locker, and mastering suite.",
+  "description": "A high-clarity vocal studio DAW with Google Drive audio import, live vocal recording & take management, dual-track stems, AI Auto-Mix trap & hip-hop mastering engine, customizable studio themes & wallpapers, flexible 16/24/32-bit WAV & MP3 offline export, Pro Vocal AI Enhancer, Auto Noise Gate, and modular DSP plugins.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

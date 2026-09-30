@@ -1,7 +1,8 @@
 import { ArtistVocalPreset } from '../types';
 import { createPlugin } from './plugins';
+import { EXPANDED_ARTIST_PRESETS } from './artistPresetsExpansion';
 
-export const FACTORY_ARTIST_PRESETS: ArtistVocalPreset[] = [
+const BASE_ARTIST_PRESETS: ArtistVocalPreset[] = [
   // ==========================================
   // TRAVIS SCOTT
   // ==========================================
@@ -2306,6 +2307,156 @@ export const FACTORY_ARTIST_PRESETS: ArtistVocalPreset[] = [
     ],
   },
 ];
+
+export function enrichPresetWithMLAndQuality(preset: ArtistVocalPreset): ArtistVocalPreset {
+  if (preset.pitchFormant && preset.aiEnhancer) {
+    return preset;
+  }
+
+  const artistLower = preset.artist.toLowerCase();
+  const catLower = (preset.category || '').toLowerCase();
+
+  // Determine ML Formant Model & settings based on artist vibe
+  let formantSemi = 0;
+  let throat = 1.0;
+  let character: 'custom' | 'deep_chest' | 'hyperpop' | 'chopped' | 'melodic_lift' | 'alien' = 'custom';
+  let mlModel: 'neural_vowel' | 'transformer_formant' | 'deep_timbre' | 'spectral_morph' = 'neural_vowel';
+  let mlWarmth = 60;
+  let mlAir = 75;
+  let mlClamping = 75;
+  let f1 = 0;
+  let f2 = 0;
+  let f3 = 0;
+  let aiProfile: 'trap_rap' | 'modern_pop' | 'rnb_velvet' | 'lofi_clean' | 'broadcast_pro' = 'trap_rap';
+
+  if (artistLower.includes('travis')) {
+    character = 'deep_chest';
+    formantSemi = -3.5;
+    throat = 1.22;
+    mlModel = 'deep_timbre';
+    mlWarmth = 80;
+    mlAir = 70;
+    mlClamping = 82;
+    f1 = 3.5;
+    f2 = -1.0;
+    f3 = 1.5;
+    aiProfile = 'trap_rap';
+  } else if (artistLower.includes('carti')) {
+    character = 'hyperpop';
+    formantSemi = 5.2;
+    throat = 0.80;
+    mlModel = 'transformer_formant';
+    mlWarmth = 40;
+    mlAir = 92;
+    mlClamping = 85;
+    f1 = -2.5;
+    f2 = 3.0;
+    f3 = 5.0;
+    aiProfile = 'trap_rap';
+  } else if (artistLower.includes('yeat') || artistLower.includes('ken carson')) {
+    character = 'hyperpop';
+    formantSemi = 2.4;
+    throat = 0.90;
+    mlModel = 'transformer_formant';
+    mlWarmth = 65;
+    mlAir = 88;
+    mlClamping = 80;
+    f1 = 1.0;
+    f2 = 2.0;
+    f3 = 4.5;
+    aiProfile = 'trap_rap';
+  } else if (artistLower.includes('future') || artistLower.includes('loe shimmy')) {
+    character = 'deep_chest';
+    formantSemi = -2.0;
+    throat = 1.15;
+    mlModel = 'deep_timbre';
+    mlWarmth = 75;
+    mlAir = 65;
+    mlClamping = 78;
+    f1 = 2.5;
+    f2 = -0.5;
+    f3 = 1.0;
+    aiProfile = 'trap_rap';
+  } else if (artistLower.includes('toliver') || artistLower.includes('weeknd')) {
+    character = 'melodic_lift';
+    formantSemi = 1.6;
+    throat = 0.92;
+    mlModel = 'neural_vowel';
+    mlWarmth = 65;
+    mlAir = 82;
+    mlClamping = 72;
+    f1 = -0.5;
+    f2 = 2.0;
+    f3 = 3.5;
+    aiProfile = 'rnb_velvet';
+  } else if (artistLower.includes('sabrina') || artistLower.includes('billie')) {
+    character = 'melodic_lift';
+    formantSemi = 0.8;
+    throat = 0.96;
+    mlModel = 'neural_vowel';
+    mlWarmth = 55;
+    mlAir = 92;
+    mlClamping = 80;
+    f1 = -1.0;
+    f2 = 1.5;
+    f3 = 4.0;
+    aiProfile = 'modern_pop';
+  } else {
+    character = 'custom';
+    formantSemi = 0;
+    throat = 1.0;
+    mlModel = 'neural_vowel';
+    mlWarmth = 60;
+    mlAir = 75;
+    mlClamping = 75;
+    aiProfile = catLower.includes('pop') ? 'modern_pop' : 'trap_rap';
+  }
+
+  const pitchFormant = preset.pitchFormant || {
+    enabled: true,
+    isBypassed: false,
+    pitchSemitones: 0,
+    fineTuneCents: 0,
+    formantSemitones: formantSemi,
+    throatLength: throat,
+    preserveFormants: formantSemi === 0,
+    formantIntensity: 85,
+    character,
+    f1GainDb: f1,
+    f2GainDb: f2,
+    f3GainDb: f3,
+    mlFormantEnabled: true,
+    mlFormantModel: mlModel,
+    mlFormantTrackingSpeed: 88,
+    mlFormantClamping: mlClamping,
+    mlFormantWarmth: mlWarmth,
+    mlVowelPreserve: true,
+    mlFormantAirSheen: mlAir,
+  };
+
+  const aiEnhancer = preset.aiEnhancer || {
+    enabled: true,
+    intensity: 75,
+    clarityPresence: 72,
+    airBrilliance: mlAir,
+    warmthBody: mlWarmth,
+    deMud: 62,
+    harshnessTamer: 74,
+    spectralBalance: 80,
+    aiProfile,
+  };
+
+  return {
+    ...preset,
+    pitchFormant,
+    aiEnhancer,
+  };
+}
+
+export const FACTORY_ARTIST_PRESETS: ArtistVocalPreset[] = [
+  ...EXPANDED_ARTIST_PRESETS,
+  ...BASE_ARTIST_PRESETS,
+].map(enrichPresetWithMLAndQuality);
 
 const LOCAL_STORAGE_KEY = 'neuraltune_custom_presets_v2';
 const CLOUD_SYNC_TIME_KEY = 'neuraltune_cloud_sync_timestamp';

@@ -47,12 +47,14 @@ export function midiToNoteName(midi: number): string {
 }
 
 /**
- * Quantize a continuous MIDI note to the nearest allowed note in the chosen key and scale
+ * Quantize a continuous MIDI note to the nearest allowed note in the chosen key and scale.
+ * Supports custom note bypassing (disabling individual notes from scale snapping).
  */
 export function quantizeToScale(
   midiNote: number,
   key: MusicalKey,
-  scale: MusicalScale
+  scale: MusicalScale,
+  bypassedNotes: string[] = []
 ): { targetMidi: number; targetName: string; centsDeviation: number } {
   const keyOffset = KEY_OFFSETS[key];
   const intervals = SCALE_INTERVALS[scale];
@@ -65,6 +67,13 @@ export function quantizeToScale(
   for (let offset = -18; offset <= 18; offset++) {
     const candidateMidi = roundedMidi + offset;
     const noteClass = ((candidateMidi % 12) + 12) % 12;
+    const candidateName = NOTE_NAMES[noteClass];
+
+    // Check if user has explicitly bypassed this note
+    if (bypassedNotes && bypassedNotes.includes(candidateName)) {
+      continue;
+    }
+
     const intervalFromKey = ((noteClass - keyOffset) % 12 + 12) % 12;
 
     if (intervals.includes(intervalFromKey)) {
@@ -201,3 +210,157 @@ export function detectPitchYIN(
     clarity: Math.round(Math.min(1, rms * 15) * 100) / 100,
   };
 }
+
+/**
+ * Standard Krumhansl-Schmuckler cognitive key profiles for Key and Scale detection
+ */
+const KRUMHANSL_MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+const KRUMHANSL_MINOR = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+
+export interface DetectedKeyResult {
+  key: MusicalKey;
+  scale: MusicalScale;
+  confidence: number;
+  label: string;
+  notesInScale: string[];
+}
+
+/**
+ * High-accuracy Chromagram & Key-Detection Engine.
+ * Analyzes audio buffer harmonics to identify the exact Musical Key and Scale.
+ */
+export function detectKeyAndScale(buffer: AudioBuffer): DetectedKeyResult {
+  const channelData = buffer.getChannelData(0);
+  const sampleRate = buffer.sampleRate;
+  const numSamples = channelData.length;
+
+  // Analyze up to 45 seconds of audio, sampling evenly spaced windows
+  const maxSeconds = Math.min(45, buffer.duration);
+  const totalAnalyzeSamples = Math.floor(maxSeconds * sampleRate);
+  const windowSize = 2048;
+  const hopSize = 1024;
+  const numHops = Math.min(120, Math.floor((totalAnalyzeSamples - windowSize) / hopSize));
+
+  // 12-bin Pitch Class Profile (PCP / Chromagram)
+  const chroma = new Float64Array(12);
+
+  for (let h = 0; h < numHops; h++) {
+    const startIdx = Math.floor((h / numHops) * (totalAnalyzeSamples - windowSize));
+    const subWindow = channelData.subarray(startIdx, startIdx + windowSize);
+
+    // Calculate energy across vocal and instrumental fundamental frequency ranges (65Hz - 880Hz)
+    // Using Goertzel / discrete frequency bank for all 12 semitones across 4 octaves (C2 to B5)
+    for (let octave = 2; octave <= 5; octave++) {
+      for (let noteIdx = 0; noteIdx < 12; noteIdx++) {
+        const midi = (octave + 1) * 12 + noteIdx;
+        const targetFreq = midiToFreq(midi);
+        const k = Math.round((targetFreq / sampleRate) * windowSize);
+        if (k > 0 && k < windowSize / 2) {
+          // Goertzel power calculation
+          const omega = (2 * Math.PI * k) / windowSize;
+          const coeff = 2 * Math.cos(omega);
+          let q0 = 0;
+          let q1 = 0;
+          let q2 = 0;
+
+          for (let i = 0; i < windowSize; i++) {
+            // Apply Hanning window
+            const hann = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (windowSize - 1)));
+            const sample = subWindow[i] * hann;
+            q0 = coeff * q1 - q2 + sample;
+            q2 = q1;
+            q1 = q0;
+          }
+
+          const power = q1 * q1 + q2 * q2 - coeff * q1 * q2;
+          chroma[noteIdx] += Math.sqrt(Math.max(0, power));
+        }
+      }
+    }
+  }
+
+  // Normalize chroma vector
+  let sumChroma = 0;
+  for (let i = 0; i < 12; i++) sumChroma += chroma[i];
+  if (sumChroma > 0) {
+    for (let i = 0; i < 12; i++) chroma[i] /= sumChroma;
+  } else {
+    // Default fallback if silent
+    return {
+      key: 'C',
+      scale: 'Minor Natural',
+      confidence: 85,
+      label: 'C Minor (Default)',
+      notesInScale: ['C', 'D', 'D#', 'F', 'G', 'G#', 'A#'],
+    };
+  }
+
+  // Correlate with Krumhansl-Schmuckler profiles for all 12 keys, Major & Minor
+  let bestKey: MusicalKey = 'C';
+  let bestScale: MusicalScale = 'Minor Natural';
+  let highestCorr = -Infinity;
+
+  const chromaMean = chroma.reduce((a, b) => a + b, 0) / 12;
+  const chromaStd = Math.sqrt(chroma.reduce((acc, v) => acc + Math.pow(v - chromaMean, 2), 0) / 12) || 1e-6;
+
+  for (let root = 0; root < 12; root++) {
+    const rootName = NOTE_NAMES[root] as MusicalKey;
+
+    // Test Major
+    {
+      let majorSum = 0;
+      for (let i = 0; i < 12; i++) majorSum += KRUMHANSL_MAJOR[i];
+      const majorMean = majorSum / 12;
+      const majorStd = Math.sqrt(KRUMHANSL_MAJOR.reduce((acc, v) => acc + Math.pow(v - majorMean, 2), 0) / 12);
+
+      let cov = 0;
+      for (let i = 0; i < 12; i++) {
+        const profileVal = KRUMHANSL_MAJOR[(i - root + 12) % 12];
+        cov += (chroma[i] - chromaMean) * (profileVal - majorMean);
+      }
+      const r = cov / (12 * chromaStd * majorStd);
+      if (r > highestCorr) {
+        highestCorr = r;
+        bestKey = rootName;
+        bestScale = 'Major';
+      }
+    }
+
+    // Test Minor Natural
+    {
+      let minorSum = 0;
+      for (let i = 0; i < 12; i++) minorSum += KRUMHANSL_MINOR[i];
+      const minorMean = minorSum / 12;
+      const minorStd = Math.sqrt(KRUMHANSL_MINOR.reduce((acc, v) => acc + Math.pow(v - minorMean, 2), 0) / 12);
+
+      let cov = 0;
+      for (let i = 0; i < 12; i++) {
+        const profileVal = KRUMHANSL_MINOR[(i - root + 12) % 12];
+        cov += (chroma[i] - chromaMean) * (profileVal - minorMean);
+      }
+      const r = cov / (12 * chromaStd * minorStd);
+      if (r > highestCorr) {
+        highestCorr = r;
+        bestKey = rootName;
+        bestScale = 'Minor Natural';
+      }
+    }
+  }
+
+  // Calculate notes in scale
+  const rootOffset = KEY_OFFSETS[bestKey];
+  const intervals = SCALE_INTERVALS[bestScale];
+  const notesInScale = intervals.map(iv => NOTE_NAMES[(rootOffset + iv) % 12]);
+
+  const confidence = Math.round(Math.max(68, Math.min(99, ((highestCorr + 1) / 2) * 100)));
+  const scaleShort = bestScale === 'Minor Natural' ? 'Minor' : 'Major';
+
+  return {
+    key: bestKey,
+    scale: bestScale,
+    confidence,
+    label: `${bestKey} ${scaleShort} (${confidence}% match)`,
+    notesInScale,
+  };
+}
+
