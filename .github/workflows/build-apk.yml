@@ -1,0 +1,289 @@
+name: Build NueralStudioPro APK & Publish Release
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Dedsec-creator/NueralStudioPro
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js (for React/Vite AI Studio bundles)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Bundle Existing Repo Code into Offline Android Assets
+        run: |
+          mkdir -p android-build/app/src/main/assets
+          mkdir -p android-build/app/src/main/java/com/rise/neuraltune
+
+          # 1. If the repo is a Vite / React / Node export from AI Studio, build it with relative offline paths:
+          if [ -f "package.json" ]; then
+            echo "Building package.json project for offline WebView..."
+            npm install --legacy-peer-deps || npm install
+            npx vite build --base=./ || npm run build
+            if [ -d "dist" ]; then
+              cp -r dist/* android-build/app/src/main/assets/
+            elif [ -d "build" ]; then
+              cp -r build/* android-build/app/src/main/assets/
+            fi
+          # 2. Otherwise, if the repo already has index.html or web files in the root, copy them directly:
+          elif [ -f "index.html" ]; then
+            echo "Copying root HTML/JS/CSS files into Android assets..."
+            rsync -av --exclude='android-build' --exclude='.git' --exclude='.github' ./ android-build/app/src/main/assets/
+          # 3. Check if files are inside a subfolder
+          else
+            FOUND_HTML=$(find . -maxdepth 3 -name "index.html" | head -n 1)
+            if [ -n "$FOUND_HTML" ]; then
+              SRC_DIR=$(dirname "$FOUND_HTML")
+              cp -r "$SRC_DIR"/* android-build/app/src/main/assets/
+            fi
+          fi
+
+          # Strip any external Tailwind/CDN scripts that would fail offline if needed & ensure index.html exists
+          ls -la android-build/app/src/main/assets/
+
+          # Write settings.gradle
+          cat << 'EOF' > android-build/settings.gradle
+          rootProject.name = "NueralStudioPro"
+          include ':app'
+          EOF
+
+          # Write root build.gradle
+          cat << 'EOF' > android-build/build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+
+          # Write app/build.gradle
+          cat << 'EOF' > android-build/app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.rise.neuraltune'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.rise.neuraltune"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode ${{ github.run_number }}
+                  versionName "1.0.${{ github.run_number }}-Offline"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_11
+                  targetCompatibility JavaVersion.VERSION_11
+              }
+          }
+          EOF
+
+          # Write AndroidManifest.xml (Offline Hardware Mic & Storage)
+          cat << 'EOF' > android-build/app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.rise.neuraltune">
+
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+              <uses-feature android:name="android.hardware.microphone" android:required="true" />
+              <uses-feature android:name="android.hardware.audio.low_latency" android:required="false" />
+
+              <application
+                  android:allowBackup="true"
+                  android:hardwareAccelerated="true"
+                  android:label="NueralStudioPro"
+                  android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:configChanges="orientation|screenSize|keyboardHidden"
+                      android:exported="true"
+                      android:screenOrientation="sensorLandscape">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # Write MainActivity.java (Auto-Grants WebAudio Mic + Handles Blob/WAV Downloads)
+          cat << 'EOF' > android-build/app/src/main/java/com/rise/neuraltune/MainActivity.java
+          package com.rise.neuraltune;
+
+          import android.Manifest;
+          import android.app.Activity;
+          import android.content.pm.PackageManager;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.util.Base64;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.PermissionRequest;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.widget.Toast;
+          import java.io.File;
+          import java.io.FileOutputStream;
+
+          public class MainActivity extends Activity {
+              private WebView webView;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                          requestPermissions(new String[]{
+                              Manifest.permission.RECORD_AUDIO,
+                              Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                              Manifest.permission.READ_EXTERNAL_STORAGE
+                          }, 101);
+                      }
+                  }
+
+                  webView = new WebView(this);
+                  setContentView(webView);
+
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setDatabaseEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
+                  settings.setAllowFileAccessFromFileURLs(true);
+                  settings.setAllowUniversalAccessFromFileURLs(true);
+                  settings.setMediaPlaybackRequiresUserGesture(false);
+
+                  webView.addJavascriptInterface(new WebAppInterface(this), "NativeAndroid");
+                  webView.setWebViewClient(new WebViewClient() {
+                      @Override
+                      public void onPageFinished(WebView view, String url) {
+                          super.onPageFinished(view, url);
+                          // Automatically intercept standard <a download> Blob links from AI Studio so WAV exports save on Android
+                          view.evaluateJavascript(
+                              "(function() {" +
+                              "  document.addEventListener('click', function(e) {" +
+                              "    var a = e.target.closest('a[download]');" +
+                              "    if (a && a.href && a.href.startsWith('blob:')) {" +
+                              "      e.preventDefault();" +
+                              "      fetch(a.href).then(r => r.blob()).then(b => {" +
+                              "        var reader = new FileReader();" +
+                              "        reader.onloadend = function() {" +
+                              "          window.NativeAndroid.saveWavFile(reader.result, a.download || 'NueralStudio_Export.wav');" +
+                              "        };" +
+                              "        reader.readAsDataURL(b);" +
+                              "      });" +
+                              "    }" +
+                              "  }, true);" +
+                              "})();", null
+                          );
+                      }
+                  });
+
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public void onPermissionRequest(final PermissionRequest request) {
+                          runOnUiThread(() -> request.grant(request.getResources()));
+                      }
+                  });
+
+                  webView.loadUrl("file:///android_asset/index.html");
+              }
+
+              public static class WebAppInterface {
+                  Activity mContext;
+                  WebAppInterface(Activity c) { mContext = c; }
+
+                  @JavascriptInterface
+                  public void saveWavFile(String base64Data, String fileName) {
+                      try {
+                          String pureBase64 = base64Data.contains(",")
+                                  ? base64Data.substring(base64Data.indexOf(",") + 1)
+                                  : base64Data;
+                          byte[] decodedBytes = Base64.decode(pureBase64, Base64.DEFAULT);
+
+                          File musicDir = new File(Environment.getExternalStoragePublicDirectory(
+                                  Environment.DIRECTORY_MUSIC), "NueralStudioPro");
+                          if (!musicDir.exists()) musicDir.mkdirs();
+
+                          File outFile = new File(musicDir, fileName);
+                          FileOutputStream fos = new FileOutputStream(outFile);
+                          fos.write(decodedBytes);
+                          fos.close();
+
+                          mContext.runOnUiThread(() -> Toast.makeText(mContext,
+                                  "Saved Master: Music/NueralStudioPro/" + fileName, Toast.LENGTH_LONG).show());
+                      } catch (Exception e) {
+                          mContext.runOnUiThread(() -> Toast.makeText(mContext,
+                                  "Export Error: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                      }
+                  }
+              }
+          }
+          EOF
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Compile APK from Your Repo Code
+        working-directory: ./android-build
+        run: gradle assembleDebug --no-daemon
+
+      - name: Prepare Release APK
+        run: cp android-build/app/build/outputs/apk/debug/app-debug.apk NueralStudioPro-Offline.apk
+
+      - name: Upload APK to Actions Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: NueralStudioPro-Offline-APK
+          path: NueralStudioPro-Offline.apk
+
+      - name: Publish APK Directly to Your GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: "NueralStudioPro Offline APK (Build #${{ github.run_number }})"
+          body: "### Direct Android APK Download\nTap **`NueralStudioPro-Offline.apk`** below under **Assets** to download and install on your Android device."
+          files: NueralStudioPro-Offline.apk
