@@ -17,6 +17,8 @@ import {
   deleteCustomPreset,
   enrichPresetWithMLAndQuality,
 } from '../audio/presets';
+import { showToast } from '../utils/toast';
+import { downloadJson } from '../utils/downloadHelper';
 import {
   Sparkles,
   Search,
@@ -114,7 +116,13 @@ export const PresetsSection: React.FC<PresetsSectionProps> = ({
   const [customCategory, setCustomCategory] = useState('Custom Vocal Chain');
 
   const allPresets = useMemo(() => {
-    return [...FACTORY_ARTIST_PRESETS, ...customPresets];
+    const list = [...FACTORY_ARTIST_PRESETS, ...customPresets];
+    const seen = new Set<string>();
+    return list.filter(p => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
   }, [customPresets]);
 
   // Find currently active preset object
@@ -359,13 +367,7 @@ export const PresetsSection: React.FC<PresetsSectionProps> = ({
   };
 
   const handleExportJSON = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(allPresets, null, 2));
-    const dlAnchor = document.createElement('a');
-    dlAnchor.setAttribute('href', dataStr);
-    dlAnchor.setAttribute('download', `NeuralTune_All_Artist_Presets_${Date.now()}.json`);
-    document.body.appendChild(dlAnchor);
-    dlAnchor.click();
-    dlAnchor.remove();
+    downloadJson(allPresets, `NeuralTune_All_Artist_Presets_${Date.now()}.json`);
   };
 
   const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -383,10 +385,10 @@ export const PresetsSection: React.FC<PresetsSectionProps> = ({
             }
           }
           setCustomPresets(updated);
-          alert('Imported presets successfully into your library!');
+          showToast('Imported presets successfully into your library!', 'success');
         }
       } catch (err) {
-        alert('Invalid preset JSON file');
+        showToast('Invalid preset JSON file', 'error');
       }
     };
     reader.readAsText(file);
@@ -555,11 +557,11 @@ export const PresetsSection: React.FC<PresetsSectionProps> = ({
                   </div>
 
                   <div className="divide-y divide-slate-800/60 pt-1">
-                    {filteredPresets.map(preset => {
+                    {filteredPresets.map((preset, idx) => {
                       const isCurr = preset.id === activePresetId;
                       return (
                         <button
-                          key={preset.id}
+                          key={`${preset.id}-${idx}`}
                           type="button"
                           onClick={() => {
                             handleApply(preset);
@@ -612,11 +614,11 @@ export const PresetsSection: React.FC<PresetsSectionProps> = ({
             <Sparkles className="w-3 h-3 text-cyan-400" />
             <span>Top Picks:</span>
           </span>
-          {iconicHighlights.map(preset => {
+          {iconicHighlights.map((preset, idx) => {
             const isCurr = preset.id === activePresetId;
             return (
               <button
-                key={preset.id}
+                key={`${preset.id}-${idx}`}
                 onClick={() => handleApply(preset)}
                 className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
                   isCurr
@@ -930,14 +932,14 @@ export const PresetsSection: React.FC<PresetsSectionProps> = ({
           </div>
 
           {/* Table Rows */}
-          {filteredPresets.map(preset => {
+          {filteredPresets.map((preset, idx) => {
             const isActive = activePresetId === preset.id;
             const isJustApplied = justAppliedId === preset.id;
             const isExpanded = expandedCardIds[preset.id];
 
             return (
               <div
-                key={preset.id}
+                key={`${preset.id}-${idx}`}
                 onClick={() => handleApply(preset)}
                 className={`transition-colors cursor-pointer group ${
                   isActive
@@ -1062,14 +1064,14 @@ export const PresetsSection: React.FC<PresetsSectionProps> = ({
       ) : (
         /* CARD GRID VIEW */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filteredPresets.map(preset => {
+          {filteredPresets.map((preset, idx) => {
             const isActive = activePresetId === preset.id;
             const isJustApplied = justAppliedId === preset.id;
             const isExpanded = expandedCardIds[preset.id];
 
             return (
               <div
-                key={preset.id}
+                key={`${preset.id}-${idx}`}
                 className={`flex flex-col justify-between rounded-2xl border transition-all duration-200 p-4 relative overflow-hidden group ${
                   isActive
                     ? 'bg-slate-900/95 border-cyan-500 shadow-xl shadow-cyan-500/10 ring-1 ring-cyan-500/50'

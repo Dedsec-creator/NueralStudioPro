@@ -21,6 +21,7 @@ import {
   Redo2,
   Database,
   Save,
+  RefreshCw,
 } from 'lucide-react';
 import { ArtistVocalPreset, AutoSaveStatus } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -140,51 +141,38 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {/* AutoSave 60s Indicator */}
-          {autoSaveStatus && (
-            <button
-              onClick={onTriggerAutoSave}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono transition cursor-pointer select-none active:scale-95 ${
-                autoSaveStatus.isSaving
-                  ? 'bg-amber-500/10 border-amber-500/40 text-amber-300 animate-pulse'
-                  : autoSaveStatus.lastSaved
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
-              }`}
-              title={`IndexedDB Auto-Save (60s loop): Automatically persists session state and parameter snapshots to protect against browser crashes.\n${
-                autoSaveStatus.lastSaved
-                  ? `Last saved: ${autoSaveStatus.secondsSinceLastSave}s ago (${autoSaveStatus.snapshotCount} parameter snapshots preserved).\nNext save in ${autoSaveStatus.secondsUntilNextSave}s.`
-                  : 'Saves every 60s to IndexedDB.'
-              }\nClick to force immediate snapshot save.`}
-            >
-              {autoSaveStatus.isSaving ? (
-                <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-              ) : (
-                <div className="w-2 h-2 rounded-full bg-emerald-400" />
-              )}
-              <span className="font-semibold hidden md:inline">
-                {autoSaveStatus.isSaving
-                  ? 'Saving DB...'
-                  : autoSaveStatus.lastSaved
-                  ? `Auto-Saved (${autoSaveStatus.secondsUntilNextSave}s)`
-                  : 'Auto-Save 60s'}
-              </span>
-              <span className="font-semibold md:hidden">
-                {autoSaveStatus.isSaving ? 'Saving' : 'Auto-Save'}
-              </span>
-            </button>
-          )}
+          {/* Manual Session Save Button (Replaces background auto-save to eliminate CPU/disk churn) */}
+          <button
+            id="btn-header-manual-save"
+            onClick={onTriggerAutoSave}
+            disabled={autoSaveStatus?.isSaving}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono transition cursor-pointer select-none active:scale-95 ${
+              autoSaveStatus?.isSaving
+                ? 'bg-amber-500/10 border-amber-500/40 text-amber-300 animate-pulse'
+                : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-cyan-500/40 hover:text-white'
+            }`}
+            title="Save Project Session to Device"
+          >
+            {autoSaveStatus?.isSaving ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+            ) : (
+              <Save className="w-3.5 h-3.5 text-cyan-400" />
+            )}
+            <span className="font-semibold hidden md:inline">
+              {autoSaveStatus?.isSaving ? 'Saving...' : 'Save Session'}
+            </span>
+          </button>
         </div>
 
         {/* Top Right Actions */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           {/* Undo / Redo History Controls */}
           <div className="flex items-center gap-0.5 bg-slate-900/90 border border-slate-800 rounded-xl p-0.5 shadow-sm">
             <button
               id="btn-header-undo"
               onClick={onUndo}
               disabled={!canUndo}
-              className={`p-1.5 sm:px-2 sm:py-1.5 rounded-lg flex items-center gap-1 transition cursor-pointer ${
+              className={`p-2 sm:px-2 sm:py-1.5 rounded-lg flex items-center gap-1 transition cursor-pointer ${
                 canUndo
                   ? 'text-slate-200 hover:text-white hover:bg-slate-800 active:scale-95'
                   : 'text-slate-600 cursor-not-allowed opacity-40'
@@ -198,7 +186,7 @@ export const Header: React.FC<HeaderProps> = ({
               id="btn-header-redo"
               onClick={onRedo}
               disabled={!canRedo}
-              className={`p-1.5 sm:px-2 sm:py-1.5 rounded-lg flex items-center gap-1 transition cursor-pointer ${
+              className={`p-2 sm:px-2 sm:py-1.5 rounded-lg flex items-center gap-1 transition cursor-pointer hidden xs:flex ${
                 canRedo
                   ? 'text-slate-200 hover:text-white hover:bg-slate-800 active:scale-95'
                   : 'text-slate-600 cursor-not-allowed opacity-40'
@@ -214,7 +202,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="btn-header-google-picker"
             onClick={onOpenGooglePicker}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600/20 via-indigo-600/20 to-cyan-500/20 hover:from-blue-600/30 hover:to-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-semibold shadow-sm transition cursor-pointer active:scale-95"
+            className="hidden md:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600/20 via-indigo-600/20 to-cyan-500/20 hover:from-blue-600/30 hover:to-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-semibold shadow-sm transition cursor-pointer active:scale-95"
             title="Google Picker: Pick audio files directly from Google Drive"
           >
             <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
@@ -222,15 +210,14 @@ export const Header: React.FC<HeaderProps> = ({
               <path d="M15.04 3.5L8.27 15.2l3.38 5.8 6.77-11.7-3.38-5.8z" fill="#0F9D58" />
               <path d="M18.42 9.3l-3.38 5.9H1.5l3.38 5.8h13.54l3.38-5.8-3.38-5.9z" fill="#FFBA00" />
             </svg>
-            <span className="hidden md:inline">Google Picker</span>
-            <span className="md:hidden">Picker</span>
+            <span>Picker</span>
           </button>
 
           {/* Google Drive Stems Import */}
           <button
             id="btn-header-google-drive"
             onClick={onOpenGoogleDrive}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 text-xs font-semibold shadow-sm transition cursor-pointer active:scale-95"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 text-xs font-semibold shadow-sm transition cursor-pointer active:scale-95"
             title="Google Drive: Access and import beat & vocal stems"
           >
             <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
@@ -238,18 +225,18 @@ export const Header: React.FC<HeaderProps> = ({
               <path d="M15.04 3.5L8.27 15.2l3.38 5.8 6.77-11.7-3.38-5.8z" fill="#0F9D58" />
               <path d="M18.42 9.3l-3.38 5.9H1.5l3.38 5.8h13.54l3.38-5.8-3.38-5.9z" fill="#FFBA00" />
             </svg>
-            <span className="hidden sm:inline">Drive Hub</span>
+            <span>Drive</span>
           </button>
 
           {/* 1-Click AI Auto-Preset & Beat Mixer Button */}
           <button
             id="btn-header-auto-preset-sync"
             onClick={onOpenAutoPresetBeatMixModal}
-            className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 hover:brightness-110 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/25 border border-amber-300 ring-1 ring-amber-400/40 transition cursor-pointer active:scale-95"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 sm:py-1.5 rounded-xl bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 hover:brightness-110 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/25 border border-amber-300 ring-1 ring-amber-400/40 transition cursor-pointer active:scale-95"
             title="✨ Auto-Preset & Beat Mixer: 1-Click AI analyzes beat & vocals, carves frequency pockets, and auto-applies matching artist preset"
           >
             <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
-            <span className="hidden sm:inline">Auto-Preset & Mix</span>
+            <span className="hidden sm:inline">Auto-Preset &amp; Mix</span>
             <span className="sm:hidden">Auto-Mix</span>
           </button>
 
@@ -257,7 +244,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="btn-header-auto-mix"
             onClick={onOpenAutoMixModal}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-semibold shadow-sm transition cursor-pointer active:scale-95"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-semibold shadow-sm transition cursor-pointer active:scale-95"
             title="AI Mastering Suite: Multiband loudness & brickwall limiting"
           >
             <Flame className="w-3.5 h-3.5 text-amber-400" />
@@ -268,35 +255,52 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="btn-open-presets"
             onClick={onOpenPresetsModal}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-semibold shadow-sm transition cursor-pointer"
+            className="hidden md:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-semibold shadow-sm transition cursor-pointer"
             title="Cloud Preset Sync & Backup"
           >
             <Cloud className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden md:inline">Cloud Backup</span>
+            <span>Cloud Backup</span>
+          </button>
+
+          {/* Mobile Save Quick Button */}
+          <button
+            id="btn-header-mobile-save"
+            onClick={onTriggerAutoSave}
+            disabled={autoSaveStatus?.isSaving}
+            className="sm:hidden p-2 rounded-xl bg-slate-900 hover:bg-slate-850 text-cyan-400 border border-slate-800 transition cursor-pointer active:scale-95"
+            title="Save Session to Device"
+          >
+            {autoSaveStatus?.isSaving ? (
+              <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
           </button>
 
           {/* Performance & Loading Optimizer Button */}
           <button
             id="btn-header-optimizer"
             onClick={onOpenOptimizer}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-semibold shadow-sm transition cursor-pointer hover:border-cyan-500/50"
-            title="Performance & Loading Optimizer: Buffer Tuning, DSP Turbo, and RAM Compactor"
+            className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-semibold shadow-sm transition cursor-pointer hover:border-cyan-500/50 flex items-center gap-1.5"
+            title="Performance Optimizer (Low-CPU & Mobile Battery Settings)"
           >
-            <Zap className="w-3.5 h-3.5 text-cyan-400" />
+            <Zap className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-cyan-400" />
             <span className="hidden sm:inline">Optimizer</span>
           </button>
 
           {/* PWA / Native Desktop App Install Trigger */}
-          <PWAInstallButton />
+          <div className="hidden sm:block">
+            <PWAInstallButton />
+          </div>
 
           {/* Settings Menu Button in the Top-Right Corner */}
           <button
             id="btn-header-settings"
             onClick={onOpenSettingsModal}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-semibold shadow-sm transition cursor-pointer hover:border-cyan-500/50"
+            className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-semibold shadow-sm transition cursor-pointer hover:border-cyan-500/50 flex items-center gap-1.5"
             title="Studio Settings: Theme, Wallpapers, Audio Buffers & Quality"
           >
-            <Settings className="w-3.5 h-3.5 text-cyan-400" />
+            <Settings className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-cyan-400" />
             <span className="hidden sm:inline">Settings</span>
           </button>
         </div>
@@ -479,11 +483,11 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             <div className="flex items-center gap-1.5 min-w-max">
-              {quickPresets.map(preset => {
+              {quickPresets.map((preset, idx) => {
                 const isCurrent = activePreset?.id === preset.id;
                 return (
                   <button
-                    key={preset.id}
+                    key={`${preset.id}-${idx}`}
                     onClick={() => onQuickApplyPreset(preset)}
                     className={`px-2.5 py-1 rounded-lg font-medium transition whitespace-nowrap flex items-center gap-1 cursor-pointer ${
                       isCurrent

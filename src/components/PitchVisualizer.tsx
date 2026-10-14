@@ -30,6 +30,12 @@ export const PitchVisualizer: React.FC<PitchVisualizerProps> = ({ pitchData }) =
       historyRef.current.shift();
     }
 
+    // Skip redundant canvas repainting during prolonged silence
+    const history = historyRef.current;
+    if (!pitchData && history.length >= 10 && history.slice(-6).every(h => h.freq === 0)) {
+      return;
+    }
+
     // Render onto canvas
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -64,7 +70,6 @@ export const PitchVisualizer: React.FC<PitchVisualizerProps> = ({ pitchData }) =
       ctx.stroke();
     }
 
-    const history = historyRef.current;
     if (history.length < 2) return;
 
     // Draw target note reference trajectory (emerald line)

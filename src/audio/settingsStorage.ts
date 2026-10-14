@@ -158,6 +158,15 @@ export interface ExportQualityOption {
 
 export const EXPORT_QUALITY_OPTIONS: ExportQualityOption[] = [
   {
+    id: 'wav_32float',
+    name: '32-Bit Studio Quality Audio (Float WAV)',
+    extension: '.wav',
+    bitDepthText: '32-bit Floating Point (Lossless)',
+    bitrateKbps: 3072,
+    description: 'Ultra-high precision studio grade with +770 dB dynamic range. Eliminates all inter-sample clipping and digital overs.',
+    badge: '32-BIT STUDIO QUALITY',
+  },
+  {
     id: 'wav_24bit',
     name: '24-Bit Studio Master WAV',
     extension: '.wav',
@@ -176,22 +185,40 @@ export const EXPORT_QUALITY_OPTIONS: ExportQualityOption[] = [
     badge: 'CD STANDARD',
   },
   {
-    id: 'wav_32float',
-    name: '32-Bit IEEE Float WAV',
-    extension: '.wav',
-    bitDepthText: '32-bit Floating Point',
-    bitrateKbps: 3072,
-    description: 'Audiophile grade with infinite dynamic headroom. Prevents inter-sample overs & digital clipping.',
-    badge: 'MAX HEADROOM',
-  },
-  {
     id: 'mp3_320',
     name: '320kbps High-Bitrate MP3',
     extension: '.mp3',
     bitDepthText: '320 kbps Constant Bitrate',
     bitrateKbps: 320,
     description: 'Maximum quality compressed audio. Ideal for email demos, social media, and mobile listening.',
-    badge: 'SMALL FILE',
+    badge: 'MAX MP3',
+  },
+  {
+    id: 'mp3_256',
+    name: '256kbps High-Quality MP3',
+    extension: '.mp3',
+    bitDepthText: '256 kbps Constant Bitrate',
+    bitrateKbps: 256,
+    description: 'High quality web broadcast format with excellent compression balance.',
+    badge: 'BROADCAST',
+  },
+  {
+    id: 'mp3_192',
+    name: '192kbps Standard MP3',
+    extension: '.mp3',
+    bitDepthText: '192 kbps Constant Bitrate',
+    bitrateKbps: 192,
+    description: 'Standard streaming format for fast mobile previews.',
+    badge: 'STANDARD',
+  },
+  {
+    id: 'mp3_128',
+    name: '128kbps Compact MP3',
+    extension: '.mp3',
+    bitDepthText: '128 kbps Constant Bitrate',
+    bitrateKbps: 128,
+    description: 'Ultra-compact file size for rapid sharing and message attachments.',
+    badge: 'COMPACT',
   },
 ];
 
@@ -238,9 +265,11 @@ export const RENDER_SPEED_OPTIONS: RenderSpeedOption[] = [
 
 // Sample Rate Options
 export const SAMPLE_RATE_OPTIONS: { id: SampleRateId; label: string; tag: string }[] = [
-  { id: 44100, label: '44.1 kHz (CD / Streaming)', tag: '44.1k' },
-  { id: 48000, label: '48.0 kHz (Pro Studio & Video Default)', tag: '48k' },
+  { id: 44100, label: '44.1 kHz (CD & Streaming Standard)', tag: '44.1k' },
+  { id: 48000, label: '48.0 kHz (Pro Studio & DAW Default)', tag: '48k' },
+  { id: 88200, label: '88.2 kHz (2x CD High-Definition)', tag: '88.2k' },
   { id: 96000, label: '96.0 kHz (Hi-Res Audiophile Master)', tag: '96k' },
+  { id: 192000, label: '192.0 kHz (Ultra-Definition Studio Archive)', tag: '192k' },
 ];
 
 // Load Studio Settings from LocalStorage with safe fallbacks

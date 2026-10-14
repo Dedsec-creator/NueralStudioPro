@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ArtistVocalPreset } from '../types';
 import { FACTORY_ARTIST_PRESETS, getCustomPresets, saveCustomPreset, deleteCustomPreset, getLastCloudSyncTime } from '../audio/presets';
+import { showToast } from '../utils/toast';
+import { downloadJson } from '../utils/downloadHelper';
 import { Cloud, Check, X, Download, Upload, Trash2, Plus, Sparkles, RefreshCw, Smartphone, Laptop } from 'lucide-react';
 
 interface PresetManagerModalProps {
@@ -58,13 +60,7 @@ export const PresetManagerModal: React.FC<PresetManagerModalProps> = ({
 
   const handleExportJSON = () => {
     const allPresets = [...FACTORY_ARTIST_PRESETS, ...customPresets];
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(allPresets, null, 2));
-    const dlAnchor = document.createElement('a');
-    dlAnchor.setAttribute('href', dataStr);
-    dlAnchor.setAttribute('download', `NeuralTune_Presets_CloudBackup_${Date.now()}.neuraltune.json`);
-    document.body.appendChild(dlAnchor);
-    dlAnchor.click();
-    dlAnchor.remove();
+    downloadJson(allPresets, `NeuralTune_Presets_CloudBackup_${Date.now()}.neuraltune.json`);
   };
 
   const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,10 +78,10 @@ export const PresetManagerModal: React.FC<PresetManagerModalProps> = ({
             }
           }
           setCustomPresets(updated);
-          alert('Successfully imported presets from cloud backup!');
+          showToast('Successfully imported presets from cloud backup!', 'success');
         }
       } catch (err) {
-        alert('Invalid preset JSON file');
+        showToast('Invalid preset JSON file', 'error');
       }
     };
     reader.readAsText(file);
@@ -212,9 +208,9 @@ export const PresetManagerModal: React.FC<PresetManagerModalProps> = ({
           )}
 
           {activeTab === 'artist' ? (
-            FACTORY_ARTIST_PRESETS.map(preset => (
+            FACTORY_ARTIST_PRESETS.map((preset, idx) => (
               <div
-                key={preset.id}
+                key={`${preset.id}-${idx}`}
                 className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 hover:bg-slate-950 transition flex items-center justify-between gap-4"
               >
                 <div>
@@ -251,9 +247,9 @@ export const PresetManagerModal: React.FC<PresetManagerModalProps> = ({
               No custom presets saved yet. Adjust your tuning, mic locker, and mastering, then save above!
             </div>
           ) : (
-            customPresets.map(preset => (
+            customPresets.map((preset, idx) => (
               <div
-                key={preset.id}
+                key={`${preset.id}-${idx}`}
                 className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between gap-4"
               >
                 <div>

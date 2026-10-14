@@ -89,7 +89,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // Custom Wallpaper Upload Handler (via base64 DataURL)
   const handleWallpaperUpload = (file: File) => {
     if (!file.type.startsWith('image/')) {
-      alert('Please upload an image file (PNG, JPG, WebP, etc.)');
+      triggerToast('Please upload an image file (PNG, JPG, WebP, etc.)');
       return;
     }
 
@@ -488,18 +488,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                     <div>
                       <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                        <span>IndexedDB Auto-Save &amp; Parameter Snapshots</span>
-                        <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase">
-                          Every 60s
+                        <span>Session Storage &amp; Snapshots</span>
+                        <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border uppercase ${
+                          autoSaveStatus.enabled
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}>
+                          {autoSaveStatus.enabled ? 'Auto-Save On (60s)' : 'Manual (Low-CPU)'}
                         </span>
                       </h4>
                       <p className="text-[10px] text-slate-400">
-                        Automatically persists current stems, audio buffers, and parameter undo/redo history to prevent data loss during browser crashes.
+                        Manual save is enabled by default to prevent CPU heating, audio dropouts, and battery drain on Android.
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const next = !autoSaveStatus.enabled;
+                        autoSaveManager.setEnabled(next);
+                        triggerToast(next ? '60s Auto-Save enabled' : 'Auto-Save disabled (Low-CPU mode)');
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-mono transition cursor-pointer"
+                      title="Toggle background auto-saving"
+                    >
+                      {autoSaveStatus.enabled ? 'Disable Auto-Save' : 'Enable Auto-Save'}
+                    </button>
                     <button
                       onClick={async () => {
                         const ok = await autoSaveManager.triggerImmediateSave();
@@ -516,20 +531,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80 text-xs font-mono">
                   <div className="p-2 rounded-lg bg-slate-950/80 border border-slate-800">
-                    <span className="text-slate-500 text-[10px] block">INTERVAL</span>
-                    <span className="font-bold text-white">60 Seconds</span>
+                    <span className="text-slate-500 text-[10px] block">MODE</span>
+                    <span className="font-bold text-white">{autoSaveStatus.enabled ? '60s Auto' : 'Manual Save'}</span>
                   </div>
                   <div className="p-2 rounded-lg bg-slate-950/80 border border-slate-800">
                     <span className="text-slate-500 text-[10px] block">STATUS</span>
                     <span className="font-bold text-emerald-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      Active
+                      <span className={`w-1.5 h-1.5 rounded-full ${autoSaveStatus.enabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
+                      {autoSaveStatus.enabled ? 'Auto-Active' : 'Low-CPU Idle'}
                     </span>
                   </div>
                   <div className="p-2 rounded-lg bg-slate-950/80 border border-slate-800">
-                    <span className="text-slate-500 text-[10px] block">NEXT AUTO-SAVE</span>
+                    <span className="text-slate-500 text-[10px] block">SAVED</span>
                     <span className="font-bold text-cyan-300">
-                      {autoSaveStatus.secondsUntilNextSave}s
+                      {autoSaveStatus.lastSaved ? `${autoSaveStatus.secondsSinceLastSave}s ago` : 'Not saved yet'}
                     </span>
                   </div>
                   <div className="p-2 rounded-lg bg-slate-950/80 border border-slate-800">

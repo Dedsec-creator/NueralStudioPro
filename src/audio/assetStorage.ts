@@ -183,8 +183,20 @@ export async function saveCurrentProjectSession(session: ActiveProjectSession): 
     const tx = db.transaction(STORE_SESSION, 'readwrite');
     const store = tx.objectStore(STORE_SESSION);
 
+    // Ensure blobs are clean detached Blobs so IndexedDB never rejects with DataCloneError or detached File handles
+    let safeVocalBlob: Blob | undefined = session.vocalBlob;
+    if (session.vocalBlob) {
+      safeVocalBlob = new Blob([session.vocalBlob], { type: session.vocalBlob.type || 'audio/wav' });
+    }
+    let safeBeatBlob: Blob | undefined = session.beatBlob;
+    if (session.beatBlob) {
+      safeBeatBlob = new Blob([session.beatBlob], { type: session.beatBlob.type || 'audio/wav' });
+    }
+
     const record: ActiveProjectSession = {
       ...session,
+      vocalBlob: safeVocalBlob,
+      beatBlob: safeBeatBlob,
       id: 'current_session',
       lastSaved: Date.now(),
     };

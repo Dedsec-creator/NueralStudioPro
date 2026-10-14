@@ -732,13 +732,13 @@ export const PitchFormantSection: React.FC<PitchFormantSectionProps> = ({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-          {ARTIST_FORMANT_PRESETS.map(preset => {
+          {ARTIST_FORMANT_PRESETS.map((preset, idx) => {
             const isMatch =
               settings.pitchSemitones === preset.patch.pitchSemitones &&
               Math.abs(settings.formantSemitones - (preset.patch.formantSemitones || 0)) < 0.2;
             return (
               <button
-                key={preset.id}
+                key={`${preset.id}-${idx}`}
                 onClick={() => handlePresetSelect(preset)}
                 className={`p-3 rounded-xl border text-left transition cursor-pointer relative overflow-hidden group ${
                   isMatch

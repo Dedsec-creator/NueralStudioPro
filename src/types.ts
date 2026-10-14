@@ -421,10 +421,14 @@ export interface LibraryAsset {
 
 export interface RenderExportOptions {
   stemSelection: 'master' | 'vocal_only' | 'beat_only';
-  format: 'wav_24bit' | 'wav_16bit' | 'wav_32float' | 'mp3_320';
-  sampleRate: 44100 | 48000 | 96000;
+  format: ExportQualityId;
+  sampleRate: SampleRateId;
   customFileName?: string;
-  renderSpeed?: 'draft_fast' | 'balanced_studio' | 'audiophile_offline';
+  renderSpeed?: RenderSpeedId;
+  audioFormat?: 'wav' | 'mp3';
+  bitDepth?: 16 | 24 | 32;
+  mp3Bitrate?: 128 | 192 | 256 | 320;
+  normalizeCeilingDb?: number;
 }
 
 export type AppThemeId =
@@ -435,9 +439,17 @@ export type AppThemeId =
   | 'studio_gold'
   | 'slate_producer';
 
-export type ExportQualityId = 'wav_16bit' | 'wav_24bit' | 'wav_32float' | 'mp3_320';
+export type ExportQualityId =
+  | 'wav_32float'
+  | 'wav_24bit'
+  | 'wav_16bit'
+  | 'mp3_320'
+  | 'mp3_256'
+  | 'mp3_192'
+  | 'mp3_128';
+
 export type RenderSpeedId = 'draft_fast' | 'balanced_studio' | 'audiophile_offline';
-export type SampleRateId = 44100 | 48000 | 96000;
+export type SampleRateId = 44100 | 48000 | 88200 | 96000 | 192000;
 
 export type PresetWallpaperId =
   | 'none'
@@ -576,6 +588,7 @@ export interface DatabaseStorageStats {
 }
 
 export type PerformanceProfileId =
+  | 'android_mobile'
   | 'turbo_low_latency'
   | 'balanced_studio'
   | 'eco_saver'
@@ -583,19 +596,21 @@ export type PerformanceProfileId =
 
 export interface PerformanceConfig {
   profile: PerformanceProfileId;
-  bufferSize: 128 | 256 | 512 | 1024;
+  bufferSize: 256 | 512 | 1024 | 2048;
   visualizerFps: 60 | 30 | 15;
   smartDspSleep: boolean;
   progressiveLoading: boolean;
   autoGlitchMitigation: boolean;
   maxMemoryCacheMb: number;
   enableOffscreenPeaks: boolean;
+  enableHighRamCache?: boolean;
 }
 
 export interface PerformanceTelemetry {
   dspLoadPercent: number;
   latencyMs: number;
   audioRamUsageMb: number;
+  maxMemoryCacheMb: number;
   activeBuffersCount: number;
   cachedBuffersCount: number;
   glitchCount: number;

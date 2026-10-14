@@ -15,6 +15,7 @@ import {
   Layers,
   Sparkles,
   AlertTriangle,
+  Smartphone,
 } from 'lucide-react';
 import {
   PerformanceConfig,
@@ -205,7 +206,7 @@ export const PerformanceOptimizerModal: React.FC<PerformanceOptimizerModalProps>
             </div>
             <div className="mt-1 flex items-baseline justify-between">
               <span className="text-base sm:text-lg font-bold text-violet-300">
-                {telemetry.audioRamUsageMb} <span className="text-xs font-normal text-slate-400">MB</span>
+                {telemetry.audioRamUsageMb} <span className="text-xs font-normal text-slate-400">/ {config.maxMemoryCacheMb || 2048} MB</span>
               </span>
               <span className="text-[10px] text-slate-500">{telemetry.activeBuffersCount + telemetry.cachedBuffersCount} stems</span>
             </div>
@@ -303,6 +304,7 @@ export const PerformanceOptimizerModal: React.FC<PerformanceOptimizerModalProps>
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
                           <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                            {pid === 'android_mobile' && <Smartphone className="w-4 h-4 text-emerald-400" />}
                             {pid === 'turbo_low_latency' && <Zap className="w-4 h-4 text-cyan-400" />}
                             {pid === 'balanced_studio' && <Sliders className="w-4 h-4 text-emerald-400" />}
                             {pid === 'eco_saver' && <Leaf className="w-4 h-4 text-amber-400" />}
@@ -382,7 +384,7 @@ export const PerformanceOptimizerModal: React.FC<PerformanceOptimizerModalProps>
                 </div>
 
                 <div className="grid grid-cols-4 gap-2 pt-1">
-                  {([128, 256, 512, 1024] as const).map((size) => (
+                  {([256, 512, 1024, 2048] as const).map((size) => (
                     <button
                       key={size}
                       onClick={() => handleUpdateConfig({ bufferSize: size })}
@@ -394,7 +396,7 @@ export const PerformanceOptimizerModal: React.FC<PerformanceOptimizerModalProps>
                     >
                       <span className="font-bold">{size}</span>
                       <span className="text-[9px] opacity-75">
-                        {size === 128 ? 'Zero-Buffer' : size === 256 ? 'Low' : size === 512 ? 'Standard' : 'Safe'}
+                        {size === 256 ? 'Ultra-Low' : size === 512 ? 'Balanced' : size === 1024 ? 'Headroom' : 'Glitch-Proof'}
                       </span>
                     </button>
                   ))}
@@ -512,6 +514,88 @@ export const PerformanceOptimizerModal: React.FC<PerformanceOptimizerModalProps>
           {/* TAB 3: STEM CACHE & MEMORY OPTIMIZER */}
           {activeTab === 'memory' && (
             <div className="space-y-3">
+              {/* RAM & Cache Allocation Tier */}
+              <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-violet-400" />
+                      Studio RAM &amp; Audio Cache Allocation
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Increase in-memory buffer cache limit. Higher RAM allocations eliminate audio stutter, disk-read latency, and stem re-decoding.
+                    </p>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-violet-300 px-2.5 py-1 rounded bg-slate-900 border border-slate-800">
+                    {config.maxMemoryCacheMb >= 1024 ? `${(config.maxMemoryCacheMb / 1024).toFixed(0)} GB` : `${config.maxMemoryCacheMb} MB`} Allocated
+                  </span>
+                </div>
+
+                {/* RAM Allocation Buttons */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+                  {[
+                    { mb: 512, label: '512 MB', tag: 'Standard' },
+                    { mb: 1024, label: '1.0 GB', tag: 'Studio Pro' },
+                    { mb: 2048, label: '2.0 GB', tag: 'High-Perf' },
+                    { mb: 4096, label: '4.0 GB', tag: 'Ultra DAW' },
+                    { mb: 8192, label: '8.0 GB', tag: 'Extreme' },
+                  ].map((ram) => (
+                    <button
+                      key={ram.mb}
+                      onClick={() => handleUpdateConfig({ maxMemoryCacheMb: ram.mb })}
+                      className={`py-2 px-2 rounded-lg border text-xs font-mono transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                        config.maxMemoryCacheMb === ram.mb
+                          ? 'bg-violet-500/25 border-violet-400 text-violet-200 font-bold shadow-md shadow-violet-500/20'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-white'
+                      }`}
+                    >
+                      <span className="font-bold">{ram.label}</span>
+                      <span className="text-[9px] opacity-75">{ram.tag}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* RAM Usage Meter Bar */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between text-[11px] font-mono">
+                    <span className="text-slate-400">RAM Utilization:</span>
+                    <span className="text-violet-300 font-bold">
+                      {telemetry.audioRamUsageMb} MB / {config.maxMemoryCacheMb || 2048} MB ({Math.min(100, Math.round((telemetry.audioRamUsageMb / (config.maxMemoryCacheMb || 2048)) * 100))}%)
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-slate-900 overflow-hidden border border-slate-800">
+                    <div
+                      className="h-full bg-gradient-to-r from-cyan-500 via-violet-500 to-pink-500 transition-all duration-300"
+                      style={{
+                        width: `${Math.min(100, Math.max(3, (telemetry.audioRamUsageMb / (config.maxMemoryCacheMb || 2048)) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* High RAM Pre-buffering toggle */}
+                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      Persistent High-RAM Pre-Buffering
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      Keep all loaded vocal &amp; beat channels uncompressed and hot in RAM for instantaneous 0ms scrub response.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={config.enableHighRamCache ?? true}
+                      onChange={(e) => handleUpdateConfig({ enableHighRamCache: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-500"></div>
+                  </label>
+                </div>
+              </div>
+
               <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>

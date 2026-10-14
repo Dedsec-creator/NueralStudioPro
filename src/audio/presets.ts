@@ -2453,10 +2453,17 @@ export function enrichPresetWithMLAndQuality(preset: ArtistVocalPreset): ArtistV
   };
 }
 
+const seenFactoryPresetIds = new Set<string>();
 export const FACTORY_ARTIST_PRESETS: ArtistVocalPreset[] = [
   ...EXPANDED_ARTIST_PRESETS,
   ...BASE_ARTIST_PRESETS,
-].map(enrichPresetWithMLAndQuality);
+]
+  .filter((preset) => {
+    if (seenFactoryPresetIds.has(preset.id)) return false;
+    seenFactoryPresetIds.add(preset.id);
+    return true;
+  })
+  .map(enrichPresetWithMLAndQuality);
 
 const LOCAL_STORAGE_KEY = 'neuraltune_custom_presets_v2';
 const CLOUD_SYNC_TIME_KEY = 'neuraltune_cloud_sync_timestamp';

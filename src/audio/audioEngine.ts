@@ -432,22 +432,12 @@ export class NeuralTuneAudioEngine {
   private lastPlaybackExpectedTime = 0;
   private lastAudioCtxCurrentTime = 0;
   private isSmartSleeping = false;
+  private lastMetricsReportMs = 0;
+  private lastReportedHadPitch = false;
+  private outMetricsBuffer = new Float32Array(512);
 
   constructor() {
     this.initLibrary();
-    if (typeof window !== 'undefined') {
-      window.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-          this.persistCurrentSession().catch(() => {});
-        }
-      });
-      window.addEventListener('pagehide', () => {
-        this.persistCurrentSession().catch(() => {});
-      });
-      window.addEventListener('beforeunload', () => {
-        this.persistCurrentSession().catch(() => {});
-      });
-    }
   }
 
   private initLibrary(): void {
@@ -516,6 +506,14 @@ export class NeuralTuneAudioEngine {
     this.libraryAssets = this.libraryAssets.filter(a => a.id !== id);
     deleteAssetFromDB(id).catch(() => {});
     this.notifyLibraryChanged();
+  }
+
+  public getAssetBlob(id: string): Blob | null {
+    return this.assetAudioCache.get(id)?.blob || null;
+  }
+
+  public getAssetBuffer(id: string): AudioBuffer | null {
+    return this.assetAudioCache.get(id)?.buffer || null;
   }
 
   public subscribeLibrary(callback: (assets: LibraryAsset[]) => void): () => void {
@@ -603,12 +601,16 @@ export class NeuralTuneAudioEngine {
         if (decodedVocal) {
           this.vocalBuffer = decodedVocal;
           this.currentVocalBlob = session.vocalBlob;
+          const peaks = (session.vocalTrackInfo.peaks && session.vocalTrackInfo.peaks.length > 0)
+            ? session.vocalTrackInfo.peaks
+            : extractWaveformPeaks(decodedVocal, 80);
           this.vocalTrackInfo = {
             ...session.vocalTrackInfo,
             duration: decodedVocal.duration,
             sampleRate: decodedVocal.sampleRate,
-            peaks: session.vocalTrackInfo.peaks?.length ? session.vocalTrackInfo.peaks : extractWaveformPeaks(decodedVocal, 80),
+            peaks,
           };
+          this.assetAudioCache.set('session_vocal', { buffer: decodedVocal, blob: session.vocalBlob });
         }
       }
 
@@ -618,12 +620,16 @@ export class NeuralTuneAudioEngine {
         if (decodedBeat) {
           this.beatBuffer = decodedBeat;
           this.currentBeatBlob = session.beatBlob;
+          const peaks = (session.beatTrackInfo.peaks && session.beatTrackInfo.peaks.length > 0)
+            ? session.beatTrackInfo.peaks
+            : extractWaveformPeaks(decodedBeat, 80);
           this.beatTrackInfo = {
             ...session.beatTrackInfo,
             duration: decodedBeat.duration,
             sampleRate: decodedBeat.sampleRate,
-            peaks: session.beatTrackInfo.peaks?.length ? session.beatTrackInfo.peaks : extractWaveformPeaks(decodedBeat, 80),
+            peaks,
           };
+          this.assetAudioCache.set('session_beat', { buffer: decodedBeat, blob: session.beatBlob });
         }
       }
 
@@ -820,33 +826,54 @@ export class NeuralTuneAudioEngine {
   }
 
   public getMasterSourceBuffer(): AudioBuffer | null {
-    if (this.vocalBuffer && this.beatBuffer && this.ctx) {
-      // Sum vocal and beat into a combined mix buffer
-      const sampleRate = this.ctx.sampleRate;
-      const length = Math.max(this.vocalBuffer.length, this.beatBuffer.length);
-      const mixed = this.ctx.createBuffer(2, length, sampleRate);
+    if (!this.vocalBuffer && !this.beatBuffer) return null;
+    if (this.vocalBuffer && !this.beatBuffer) return this.vocalBuffer;
+    if (!this.vocalBuffer && this.beatBuffer) return this.beatBuffer;
+
+    if (this.vocalBuffer && this.beatBuffer) {
+      const vBuf = this.vocalBuffer;
+      const bBuf = this.beatBuffer;
+      const targetSampleRate = vBuf.sampleRate || (this.ctx ? this.ctx.sampleRate : 48000);
+      const totalDuration = Math.max(vBuf.duration, bBuf.duration);
+      const totalLength = Math.max(1, Math.floor(totalDuration * targetSampleRate));
+
+      let mixed: AudioBuffer;
+      if (this.ctx) {
+        mixed = this.ctx.createBuffer(2, totalLength, targetSampleRate);
+      } else {
+        const off = new OfflineAudioContext(2, totalLength, targetSampleRate);
+        mixed = off.createBuffer(2, totalLength, targetSampleRate);
+      }
+
       const leftOut = mixed.getChannelData(0);
       const rightOut = mixed.getChannelData(1);
 
-      const vL = this.vocalBuffer.getChannelData(0);
-      const vR = this.vocalBuffer.numberOfChannels > 1 ? this.vocalBuffer.getChannelData(1) : vL;
-      const bL = this.beatBuffer.getChannelData(0);
-      const bR = this.beatBuffer.numberOfChannels > 1 ? this.beatBuffer.getChannelData(1) : bL;
+      const vL = vBuf.getChannelData(0);
+      const vR = vBuf.numberOfChannels > 1 ? vBuf.getChannelData(1) : vL;
+      const bL = bBuf.getChannelData(0);
+      const bR = bBuf.numberOfChannels > 1 ? bBuf.getChannelData(1) : bL;
 
       const vVol = this.vocalTrackInfo.isMuted ? 0 : this.vocalTrackInfo.volume;
       const bVol = this.beatTrackInfo.isMuted ? 0 : this.beatTrackInfo.volume;
 
-      for (let i = 0; i < length; i++) {
-        const vLeft = i < vL.length ? vL[i] * vVol : 0;
-        const vRight = i < vR.length ? vR[i] * vVol : 0;
-        const bLeft = i < bL.length ? bL[i] * bVol : 0;
-        const bRight = i < bR.length ? bR[i] * bVol : 0;
+      const vRateRatio = vBuf.sampleRate / targetSampleRate;
+      const bRateRatio = bBuf.sampleRate / targetSampleRate;
+
+      for (let i = 0; i < totalLength; i++) {
+        const vIdx = Math.floor(i * vRateRatio);
+        const bIdx = Math.floor(i * bRateRatio);
+
+        const vLeft = vIdx < vL.length ? vL[vIdx] * vVol : 0;
+        const vRight = vIdx < vR.length ? vR[vIdx] * vVol : 0;
+        const bLeft = bIdx < bL.length ? bL[bIdx] * bVol : 0;
+        const bRight = bIdx < bR.length ? bR[bIdx] * bVol : 0;
+
         leftOut[i] = vLeft + bLeft;
         rightOut[i] = vRight + bRight;
       }
       return mixed;
     }
-    return this.vocalBuffer || this.beatBuffer || null;
+    return null;
   }
 
   public async loadLibraryAssetIntoTrack(asset: LibraryAsset, target: 'vocal' | 'beat'): Promise<boolean> {
@@ -985,10 +1012,17 @@ export class NeuralTuneAudioEngine {
         return false;
       }
 
-      this.ctx = new AudioContextClass({
-        latencyHint: 0, // Direct hardware minimal buffer
-        sampleRate: 48000,
-      });
+      try {
+        this.ctx = new AudioContextClass({
+          latencyHint: 'interactive',
+          sampleRate: 48000,
+        });
+      } catch {
+        // Fall back to system default sample rate if 48000 is not hardware-supported
+        this.ctx = new AudioContextClass({
+          latencyHint: 'interactive',
+        });
+      }
 
       if (this.ctx.state === 'suspended') {
         // Attempt non-blocking resume; safely catch if deferred or navigating
@@ -1712,30 +1746,14 @@ export class NeuralTuneAudioEngine {
         peaks,
       };
 
-      // Automatically register imported vocal into Studio Library
-      const assetId = `import_vocal_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      const asset: LibraryAsset = {
-        id: assetId,
-        name: file.name,
-        type: 'imported_vocal',
-        timestamp: Date.now(),
-        duration: decoded.duration,
-        fileSize: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
-        format: file.name.toUpperCase().endsWith('.MP3') ? 'MP3' : 'WAV',
-        sampleRate: decoded.sampleRate,
-        blob: file,
-        audioUrl: URL.createObjectURL(file),
-        peaks,
-        notes: `Imported vocal stem (${decoded.numberOfChannels} ch, ${decoded.sampleRate}Hz)`,
-      };
+      // Cache in active session memory without auto-uploading to persistent storage
+      const assetId = `vocal_${Date.now()}`;
       this.assetAudioCache.set(assetId, { buffer: decoded, blob: file });
-      this.addLibraryAsset(asset);
 
       if (this.beatBuffer) {
         this.autoAlignStems(this.synergySettings.rideStyle);
       }
       this.notifyTracksChanged();
-      this.persistCurrentSession().catch(() => {});
       return true;
     } catch (e) {
       console.warn('Could not process vocal audio file:', e);
@@ -1775,30 +1793,14 @@ export class NeuralTuneAudioEngine {
         peaks,
       };
 
-      // Automatically register imported beat into Studio Library
-      const assetId = `import_beat_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      const asset: LibraryAsset = {
-        id: assetId,
-        name: file.name,
-        type: 'imported_beat',
-        timestamp: Date.now(),
-        duration: decoded.duration,
-        fileSize: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
-        format: file.name.toUpperCase().endsWith('.MP3') ? 'MP3' : 'WAV',
-        sampleRate: decoded.sampleRate,
-        blob: file,
-        audioUrl: URL.createObjectURL(file),
-        peaks,
-        notes: `Imported beat (${bpm} BPM, ${decoded.sampleRate}Hz)`,
-      };
+      // Cache in active session memory without auto-uploading to persistent storage
+      const assetId = `beat_${Date.now()}`;
       this.assetAudioCache.set(assetId, { buffer: decoded, blob: file });
-      this.addLibraryAsset(asset);
 
       if (this.vocalBuffer) {
         this.autoAlignStems(this.synergySettings.rideStyle);
       }
       this.notifyTracksChanged();
-      this.persistCurrentSession().catch(() => {});
       return true;
     } catch (e) {
       console.warn('Could not process beat audio file:', e);
@@ -2153,8 +2155,8 @@ export class NeuralTuneAudioEngine {
       this.beatGainNode.gain.cancelScheduledValues(now);
       this.vocalGainNode.gain.setValueAtTime(0.0001, now);
       this.beatGainNode.gain.setValueAtTime(0.0001, now);
-      this.vocalGainNode.gain.exponentialRampToValueAtTime(Math.max(0.0001, vocalGain), now + 0.008);
-      this.beatGainNode.gain.exponentialRampToValueAtTime(Math.max(0.0001, beatGain), now + 0.008);
+      this.vocalGainNode.gain.linearRampToValueAtTime(vocalGain, now + 0.008);
+      this.beatGainNode.gain.linearRampToValueAtTime(beatGain, now + 0.008);
     } else {
       this.vocalGainNode.gain.setTargetAtTime(vocalGain, now, 0.015);
       this.beatGainNode.gain.setTargetAtTime(beatGain, now, 0.015);
@@ -2388,8 +2390,10 @@ export class NeuralTuneAudioEngine {
     this.recordingDuration = 0;
     this.isRecording = true;
 
-    // Ultra-low latency recording buffer (256 samples = 5.3ms) to eliminate buffer lag
-    const bufferSize = Math.min(512, Math.max(128, this.performanceConfig.bufferSize || 256));
+    // Safe, low-latency recording buffer (must be power of two >= 256 for Web Audio createScriptProcessor)
+    const validSizes = [256, 512, 1024, 2048, 4096];
+    const requested = this.performanceConfig.bufferSize || 256;
+    const bufferSize = validSizes.includes(requested as any) ? requested : 256;
     this.recordingProcessor = this.ctx.createScriptProcessor(bufferSize, 1, 1);
     this.recordingMuteGain = this.ctx.createGain();
     this.recordingMuteGain.gain.value = 0.0;
@@ -2572,12 +2576,14 @@ export class NeuralTuneAudioEngine {
   }
 
   // Playback control
-  public play(): void {
+  public async play(): Promise<void> {
     if (!this.ctx || !this.inputGain) return;
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume().catch((err) => {
+      try {
+        await this.ctx.resume();
+      } catch (err) {
         console.warn('AudioContext resume deferred:', err);
-      });
+      }
     }
 
     this.stopPlayback(true);
@@ -2891,8 +2897,11 @@ export class NeuralTuneAudioEngine {
         this.fpsMeasurementStart = timestamp;
       }
 
-      // Visualizer / Analysis FPS throttling based on performance profile (e.g. 30 FPS eco mode vs 60 FPS standard)
-      const targetInterval = 1000 / (this.performanceConfig.visualizerFps || 60);
+      // Visualizer / Analysis FPS throttling:
+      // When audio is idle (not playing or monitoring), throttle to 4 FPS (250ms) to conserve CPU/battery
+      const isAudioActive = this.isPlaying || this.isLiveMicActive || (this.previewSourceNode !== null);
+      const targetFps = isAudioActive ? (this.performanceConfig.visualizerFps || 30) : 4;
+      const targetInterval = 1000 / targetFps;
       if (timestamp - this.lastAnalysisStepTime >= targetInterval - 2) {
         this.lastAnalysisStepTime = timestamp;
         this.runAnalysisStep();
@@ -2908,16 +2917,23 @@ export class NeuralTuneAudioEngine {
     const t0 = performance.now();
 
     // Check for Audio Glitches / Underruns during active playback
-    if (this.isPlaying) {
+    if (this.isPlaying && this.ctx.state === 'running') {
       const nowWall = performance.now();
       const currentAudioTime = this.ctx.currentTime;
       if (this.lastAudioCtxCurrentTime > 0 && this.lastPlaybackExpectedTime > 0) {
         const expectedDelta = (nowWall - this.lastPlaybackExpectedTime) / 1000;
         const actualDelta = currentAudioTime - this.lastAudioCtxCurrentTime;
-        // If audio clock stalled by more than 80ms or drifted significantly
-        if (actualDelta < 0 || (expectedDelta > 0.05 && actualDelta < expectedDelta * 0.35)) {
+        // Check for genuine audio clock stall (wall clock advanced >=120ms while audio clock was frozen)
+        if (actualDelta <= 0.001 && expectedDelta >= 0.12) {
           this.glitchCount++;
           this.lastGlitchTime = nowWall;
+
+          // Auto-glitch mitigation: dynamically bump buffer headroom if dropouts are detected
+          if (this.performanceConfig.autoGlitchMitigation && this.performanceConfig.bufferSize < 2048) {
+            const nextSize = this.performanceConfig.bufferSize === 256 ? 512 : this.performanceConfig.bufferSize === 512 ? 1024 : 2048;
+            this.performanceConfig.bufferSize = nextSize;
+            savePerformanceConfig(this.performanceConfig);
+          }
         }
       }
       this.lastAudioCtxCurrentTime = currentAudioTime;
@@ -2931,21 +2947,29 @@ export class NeuralTuneAudioEngine {
     const isAudioActive = this.isPlaying || this.isLiveMicActive || (this.previewSourceNode !== null);
     if (this.performanceConfig.smartDspSleep && !isAudioActive) {
       this.isSmartSleeping = true;
-      const bufferSamples = this.performanceConfig.bufferSize || 256;
-      const sampleRate = this.ctx.sampleRate || 48000;
-      const calcLatency = Math.round(((this.ctx.baseLatency || 0.005) * 1000 + (bufferSamples / sampleRate) * 1000) * 10) / 10;
-      this.onMetricsUpdate?.({
-        inputRmsDb: -80,
-        outputRmsDb: -80,
-        peakDb: -80,
-        noiseReductionDb: 0,
-        gainReductionDb: 0,
-        lufs: -60,
-        latencyMs: calcLatency,
-        sampleRate,
-        bufferSize: bufferSamples,
-        dspLoadPercent: 2.1,
-      });
+      const nowMs = performance.now();
+      if (nowMs - this.lastMetricsReportMs >= 500) {
+        this.lastMetricsReportMs = nowMs;
+        const bufferSamples = this.performanceConfig.bufferSize || 512;
+        const sampleRate = this.ctx.sampleRate || 48000;
+        const calcLatency = Math.round(((this.ctx.baseLatency || 0.005) * 1000 + (bufferSamples / sampleRate) * 1000) * 10) / 10;
+        this.onMetricsUpdate?.({
+          inputRmsDb: -80,
+          outputRmsDb: -80,
+          peakDb: -80,
+          noiseReductionDb: 0,
+          gainReductionDb: 0,
+          lufs: -60,
+          latencyMs: calcLatency,
+          sampleRate,
+          bufferSize: bufferSamples,
+          dspLoadPercent: 1.2,
+        });
+        if (this.lastReportedHadPitch) {
+          this.onPitchUpdate?.(null);
+          this.lastReportedHadPitch = false;
+        }
+      }
       return;
     }
     this.isSmartSleeping = false;
@@ -3103,7 +3127,13 @@ export class NeuralTuneAudioEngine {
       }
     }
 
-    this.onPitchUpdate?.(pitchData);
+    if (pitchData) {
+      this.lastReportedHadPitch = true;
+      this.onPitchUpdate?.(pitchData);
+    } else if (this.lastReportedHadPitch) {
+      this.lastReportedHadPitch = false;
+      this.onPitchUpdate?.(null);
+    }
 
     // Dynamic Vocal-Beat Synergy Engine: Pocket Carve & Sidechain Ducking
     if (this.beatCarveFilter && this.beatDuckingGain && this.synergySettings.enabled) {
@@ -3123,43 +3153,48 @@ export class NeuralTuneAudioEngine {
       }
     }
 
-    // Calculate Output RMS & LUFS metrics
-    const outData = new Float32Array(512);
-    this.outputAnalyser.getFloatTimeDomainData(outData);
-    let outSum = 0;
-    let peak = 0;
-    for (let i = 0; i < outData.length; i++) {
-      const absVal = Math.abs(outData[i]);
-      if (absVal > peak) peak = absVal;
-      outSum += absVal * absVal;
+    // Throttle audio metrics updates to ~15 Hz (every 65ms) to prevent excessive React state re-renders
+    const nowMetrics = performance.now();
+    if (nowMetrics - this.lastMetricsReportMs >= 65) {
+      this.lastMetricsReportMs = nowMetrics;
+
+      // Calculate Output RMS & LUFS metrics into pre-allocated buffer (no garbage collector churn)
+      this.outputAnalyser.getFloatTimeDomainData(this.outMetricsBuffer);
+      let outSum = 0;
+      let peak = 0;
+      for (let i = 0; i < this.outMetricsBuffer.length; i++) {
+        const absVal = Math.abs(this.outMetricsBuffer[i]);
+        if (absVal > peak) peak = absVal;
+        outSum += absVal * absVal;
+      }
+      const outRms = Math.sqrt(outSum / this.outMetricsBuffer.length);
+      const outRmsDb = outRms > 1e-5 ? 20 * Math.log10(outRms) : -80;
+      const peakDb = peak > 1e-5 ? 20 * Math.log10(peak) : -80;
+      const estimatedLufs = Math.max(-60, Math.min(0, outRmsDb - 2.5));
+
+      const tEnd = performance.now();
+      const execMs = Math.max(0.05, tEnd - t0);
+      // Real dynamic DSP Load %
+      const dynamicDspLoad = Math.min(98, Math.max(2.5, Math.round((execMs / 16.6) * 100 * 10) / 10));
+      const bufferSamples = this.performanceConfig.bufferSize || 512;
+      const sampleRate = this.ctx.sampleRate || 48000;
+      const calcLatency = Math.round(((this.ctx.baseLatency || 0.005) * 1000 + (bufferSamples / sampleRate) * 1000) * 10) / 10;
+
+      const metrics: AudioMetrics = {
+        inputRmsDb: Math.round(inRmsDb * 10) / 10,
+        outputRmsDb: Math.round(outRmsDb * 10) / 10,
+        peakDb: Math.round(peakDb * 10) / 10,
+        noiseReductionDb: currentNoiseReductionDb,
+        gainReductionDb: Math.round(Math.abs(this.masterCompressor?.reduction || 0) * 10) / 10,
+        lufs: Math.round(estimatedLufs * 10) / 10,
+        latencyMs: calcLatency,
+        sampleRate,
+        bufferSize: bufferSamples,
+        dspLoadPercent: dynamicDspLoad,
+      };
+
+      this.onMetricsUpdate?.(metrics);
     }
-    const outRms = Math.sqrt(outSum / outData.length);
-    const outRmsDb = outRms > 1e-5 ? 20 * Math.log10(outRms) : -80;
-    const peakDb = peak > 1e-5 ? 20 * Math.log10(peak) : -80;
-    const estimatedLufs = Math.max(-60, Math.min(0, outRmsDb - 2.5));
-
-    const tEnd = performance.now();
-    const execMs = Math.max(0.05, tEnd - t0);
-    // Real dynamic DSP Load %: proportion of 16.6ms frame budget spent computing analysis & DSP
-    const dynamicDspLoad = Math.min(98, Math.max(3.5, Math.round((execMs / 16.6) * 100 * 10) / 10));
-    const bufferSamples = this.performanceConfig.bufferSize || 256;
-    const sampleRate = this.ctx.sampleRate || 48000;
-    const calcLatency = Math.round(((this.ctx.baseLatency || 0.005) * 1000 + (bufferSamples / sampleRate) * 1000) * 10) / 10;
-
-    const metrics: AudioMetrics = {
-      inputRmsDb: Math.round(inRmsDb * 10) / 10,
-      outputRmsDb: Math.round(outRmsDb * 10) / 10,
-      peakDb: Math.round(peakDb * 10) / 10,
-      noiseReductionDb: currentNoiseReductionDb,
-      gainReductionDb: Math.round(Math.abs(this.masterCompressor?.reduction || 0) * 10) / 10,
-      lufs: Math.round(estimatedLufs * 10) / 10,
-      latencyMs: calcLatency,
-      sampleRate,
-      bufferSize: bufferSamples,
-      dspLoadPercent: dynamicDspLoad,
-    };
-
-    this.onMetricsUpdate?.(metrics);
   }
 
   // Update Tuning Dial settings
@@ -4284,7 +4319,15 @@ export class NeuralTuneAudioEngine {
     }
 
     const renderedBuffer = await offlineCtx.startRendering();
-    const { blob, extension, mimeType } = encodeAudioBufferToBlob(renderedBuffer, exportFormat);
+    const { blob, extension, mimeType, formatDescription } = encodeAudioBufferToBlob(
+      renderedBuffer,
+      exportFormat,
+      {
+        audioFormat: options.audioFormat,
+        bitDepth: options.bitDepth,
+        mp3Bitrate: options.mp3Bitrate,
+      }
+    );
 
     // Register rendered asset into Studio Library
     const stemTag = options.stemSelection === 'master' ? 'Master' : options.stemSelection === 'vocal_only' ? 'Vocal_Stem' : 'Beat_Stem';
@@ -4307,13 +4350,13 @@ export class NeuralTuneAudioEngine {
       timestamp: Date.now(),
       duration: renderedBuffer.duration,
       fileSize: `${(blob.size / (1024 * 1024)).toFixed(2)} MB`,
-      format: exportFormat === 'mp3_320' ? 'MP3' : 'WAV',
+      format: extension === '.mp3' ? 'MP3' : 'WAV',
       sampleRate,
       blob,
       audioUrl: URL.createObjectURL(blob),
       presetName: activePresetName,
       peaks,
-      notes: `Rendered with ${exportFormat.toUpperCase().replace('_', ' ')} @ ${sampleRate}Hz • Full DSP Chain Applied`,
+      notes: `${formatDescription} @ ${(sampleRate / 1000).toFixed(1)}kHz • Full DSP Chain Applied`,
     };
 
     this.addLibraryAsset(asset);
@@ -4418,10 +4461,11 @@ export class NeuralTuneAudioEngine {
 
     const dspLoad = this.isSmartSleeping ? 2.1 : (this.isPlaying ? 16.5 : 4.5);
 
+    const maxRam = this.performanceConfig.maxMemoryCacheMb || 2048;
     let status: PerformanceTelemetry['status'] = 'optimal';
-    if (this.glitchCount > 2 || dspLoad > 75) {
+    if (this.glitchCount > 2 || dspLoad > 85 || ramMb > maxRam * 0.95) {
       status = 'strained';
-    } else if (dspLoad > 45 || ramMb > 250) {
+    } else if (dspLoad > 55 || ramMb > maxRam * 0.8) {
       status = 'nominal';
     }
 
@@ -4429,6 +4473,7 @@ export class NeuralTuneAudioEngine {
       dspLoadPercent: dspLoad,
       latencyMs,
       audioRamUsageMb: ramMb,
+      maxMemoryCacheMb: maxRam,
       activeBuffersCount: activeCount,
       cachedBuffersCount: cachedCount,
       glitchCount: this.glitchCount,
@@ -4596,7 +4641,7 @@ export function audioBufferToWavBlob(buffer: AudioBuffer, bitDepth: 16 | 24 = 16
     }
   }
 
-  return new Blob([view], { type: 'audio/wav' });
+  return new Blob([arrayBuffer], { type: 'audio/wav' });
 }
 
 // Singleton audio engine instance

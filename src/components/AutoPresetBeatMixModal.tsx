@@ -17,11 +17,13 @@ import {
   Flame,
   Check,
   Disc,
+  Download,
 } from 'lucide-react';
 import { ArtistVocalPreset, AutoPresetBeatMixResult, MusicalKey, MusicalScale } from '../types';
 import { audioEngine } from '../audio/audioEngine';
 import { autoMatchBeatToVocalsAndApplyPreset } from '../audio/autoMixEngine';
 import { FACTORY_ARTIST_PRESETS } from '../audio/presets';
+import { downloadBlob } from '../utils/downloadHelper';
 
 interface AutoPresetBeatMixModalProps {
   isOpen: boolean;
@@ -37,12 +39,32 @@ export const AutoPresetBeatMixModal: React.FC<AutoPresetBeatMixModalProps> = ({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AutoPresetBeatMixResult | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isDownloadingMix, setIsDownloadingMix] = useState(false);
   const [manualSelectedGenre, setManualSelectedGenre] = useState<string>('auto');
 
   if (!isOpen) return null;
 
   const hasBeat = Boolean(audioEngine.beatBuffer && audioEngine.beatTrackInfo.duration > 0);
   const hasVocal = Boolean(audioEngine.vocalBuffer && audioEngine.vocalTrackInfo.duration > 0);
+
+  const handleDownloadMix = async () => {
+    setIsDownloadingMix(true);
+    try {
+      await audioEngine.initialize();
+      const res = await audioEngine.renderOfflineBounce({
+        stemSelection: 'master',
+        format: 'wav_24bit',
+        sampleRate: 48000,
+      });
+      const blob = res.asset?.blob || (res as unknown as Blob);
+      const name = res.asset?.name || `NeuralTune_${(result?.matchedPreset.name || 'AutoMix').replace(/\s+/g, '_')}_Master_${Date.now()}.wav`;
+      downloadBlob(blob, name);
+    } catch (err) {
+      console.error('Download mix error:', err);
+    } finally {
+      setIsDownloadingMix(false);
+    }
+  };
 
   const handleRunAutoMix = async () => {
     setIsAnalyzing(true);
@@ -256,10 +278,10 @@ export const AutoPresetBeatMixModal: React.FC<AutoPresetBeatMixModalProps> = ({
               </p>
 
               {/* Instant Playback Test & Controls */}
-              <div className="flex items-center justify-between gap-3 pt-1">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-1">
                 <button
                   onClick={handleTogglePlayback}
-                  className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all border ${
+                  className={`w-full sm:flex-1 py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all border ${
                     isPlaying
                       ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
                       : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
@@ -273,7 +295,27 @@ export const AutoPresetBeatMixModal: React.FC<AutoPresetBeatMixModalProps> = ({
                   ) : (
                     <>
                       <Play className="w-4 h-4 fill-emerald-300" />
-                      <span>▶ Preview Mixed Beat & Vocal</span>
+                      <span>▶ Preview Mixed Audio</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  id="btn-download-auto-preset-mix"
+                  onClick={handleDownloadMix}
+                  disabled={isDownloadingMix}
+                  className="w-full sm:w-auto py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-slate-950 font-black shadow-lg shadow-amber-500/20 active:scale-95"
+                  title="Export and download 24-bit studio mixdown master"
+                >
+                  {isDownloadingMix ? (
+                    <>
+                      <Disc className="w-4 h-4 animate-spin text-slate-950" />
+                      <span>Bouncing Master...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 text-slate-950" />
+                      <span>Download Master WAV</span>
                     </>
                   )}
                 </button>
@@ -292,13 +334,13 @@ export const AutoPresetBeatMixModal: React.FC<AutoPresetBeatMixModalProps> = ({
                     { id: 'preset-drake-rich-flex', name: 'Drake (Rich Flex / OVO)' },
                     { id: 'preset-weeknd-blinding-lights', name: 'The Weeknd (Blinding Lights)' },
                     { id: 'preset-billie-birds-feather', name: 'Billie Eilish (Whisper Haas)' },
-                  ].map(p => {
+                  ].map((p, idx) => {
                     const presetDef = FACTORY_ARTIST_PRESETS.find(pr => pr.id === p.id);
                     if (!presetDef) return null;
                     const isCur = result.matchedPreset.id === p.id;
                     return (
                       <button
-                        key={p.id}
+                        key={`${p.id}-${idx}`}
                         onClick={() => handleApplySpecificPreset(presetDef)}
                         className={`p-2 rounded-lg text-left text-[11px] font-mono transition-all cursor-pointer truncate border ${
                           isCur

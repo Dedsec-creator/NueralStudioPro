@@ -3,7 +3,7 @@ import { audioEngine } from './audioEngine';
 import { historyManager } from './historyManager';
 
 class AutoSaveManager {
-  private enabled: boolean = true;
+  private enabled: boolean = false;
   private intervalSeconds: number = 60;
   private timerId: number | null = null;
   private tickIntervalId: number | null = null;
@@ -18,23 +18,10 @@ class AutoSaveManager {
     if (this.isInitialized) return;
     this.isInitialized = true;
     this.intervalSeconds = intervalSeconds;
-    this.nextSaveTimestamp = Date.now() + this.intervalSeconds * 1000;
+    this.nextSaveTimestamp = 0;
 
-    // Attach lifecycle listeners for crash/unload prevention
-    if (typeof window !== 'undefined') {
-      window.addEventListener('beforeunload', () => {
-        this.triggerImmediateSaveSync();
-      });
-
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') {
-          // Tab switched or hidden - trigger a silent save
-          this.triggerImmediateSave();
-        }
-      });
-    }
-
-    this.start();
+    // Notify initial state
+    this.notifySubscribers();
   }
 
   public start(): void {

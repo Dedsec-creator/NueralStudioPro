@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { LibraryAsset, LibraryAssetType, RenderExportOptions } from '../types';
 import { audioEngine } from '../audio/audioEngine';
+import { getAssetFromDB } from '../audio/assetStorage';
+import { AdvancedExportSection } from './AdvancedExportSection';
+import { showToast } from '../utils/toast';
+import { downloadBlob, downloadAudioBuffer } from '../utils/downloadHelper';
 import {
   FolderArchive,
   Download,
@@ -78,24 +82,64 @@ export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged,
     }
   };
 
-  const handleDownload = (asset: LibraryAsset) => {
+  const handleDownload = async (asset: LibraryAsset) => {
+    // 1. Direct Blob attached on asset
     if (asset.blob) {
-      const url = URL.createObjectURL(asset.blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = asset.name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } else if (asset.audioUrl && (asset.audioUrl.startsWith('data:') || asset.audioUrl.startsWith('http'))) {
-      const a = document.createElement('a');
-      a.href = asset.audioUrl;
-      a.download = asset.name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      downloadBlob(asset.blob, asset.name);
+      return;
     }
+
+    // 2. Check audioEngine in-memory asset audio cache
+    const cachedBlob = audioEngine.getAssetBlob(asset.id);
+    if (cachedBlob) {
+      downloadBlob(cachedBlob, asset.name);
+      return;
+    }
+
+    const cachedBuffer = audioEngine.getAssetBuffer(asset.id);
+    if (cachedBuffer) {
+      downloadAudioBuffer(cachedBuffer, asset.name, asset.format === 'MP3' ? 'mp3_320' : 'wav_24bit');
+      return;
+    }
+
+    // 3. Check IndexedDB persistent store
+    try {
+      const fromDb = await getAssetFromDB(asset.id);
+      if (fromDb?.blob) {
+        downloadBlob(fromDb.blob, asset.name);
+        return;
+      }
+    } catch (_) {}
+
+    // 4. Check audioUrl if available
+    if (asset.audioUrl && (asset.audioUrl.startsWith('data:') || asset.audioUrl.startsWith('http') || asset.audioUrl.startsWith('blob:'))) {
+      try {
+        const resp = await fetch(asset.audioUrl);
+        const fetchedBlob = await resp.blob();
+        if (fetchedBlob && fetchedBlob.size > 0) {
+          downloadBlob(fetchedBlob, asset.name);
+          return;
+        }
+      } catch (_) {}
+    }
+
+    // 5. Fallback to active audioEngine stems if matching
+    if (asset.type === 'recorded_vocal' || asset.type === 'imported_vocal' || asset.type === 'rendered_vocal' || asset.name.toLowerCase().includes('vocal')) {
+      const vBuf = audioEngine.getVocalBuffer();
+      if (vBuf) {
+        downloadAudioBuffer(vBuf, asset.name, asset.format === 'MP3' ? 'mp3_320' : 'wav_24bit');
+        return;
+      }
+    }
+    if (asset.type === 'imported_beat' || asset.type === 'rendered_beat' || asset.name.toLowerCase().includes('beat')) {
+      const bBuf = audioEngine.getBeatBuffer();
+      if (bBuf) {
+        downloadAudioBuffer(bBuf, asset.name, asset.format === 'MP3' ? 'mp3_320' : 'wav_24bit');
+        return;
+      }
+    }
+
+    showToast(`Could not find audio data for "${asset.name}".`, 'error');
   };
 
   const handleDelete = (id: string) => {
@@ -126,12 +170,21 @@ export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged,
     setIsExporting(true);
     setExportSuccessMessage(null);
     try {
+      await audioEngine.initialize();
+      if (!audioEngine.getVocalBuffer() && !audioEngine.getBeatBuffer()) {
+        showToast('Loading studio demo stems for export...', 'info');
+        await audioEngine.loadDemoStems('rap_f_minor');
+      }
       const res = await audioEngine.renderOfflineBounce(exportOptions);
-      setExportSuccessMessage(`Exported: ${res.asset.name} (${res.asset.fileSize})`);
+      const blob = res.asset?.blob || (res as Blob);
+      const name = res.asset?.name || `Studio_Export_${Date.now()}.wav`;
+
+      downloadBlob(blob, name);
+      setExportSuccessMessage(`Exported & downloaded: ${name} (${res.asset?.fileSize || ''})`);
       setTimeout(() => setExportSuccessMessage(null), 5000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Export failed: ${msg}`);
+      showToast(`Export failed: ${msg}`, 'error');
     } finally {
       setIsExporting(false);
     }
@@ -255,62 +308,16 @@ export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged,
           </div>
         </div>
 
-        {/* Quick Bounce & Render Bar */}
-        <div className="mt-4 p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-          <div className="md:col-span-5 space-y-1">
-            <span className="text-xs font-bold text-white flex items-center gap-1.5">
-              <Disc className="w-4 h-4 text-pink-400" />
-              High-Fidelity Studio Bounce &amp; Render
-            </span>
-            <p className="text-[11px] text-slate-400">
-              Captures all active DSP features: Pitch/Formant, Auto-Gate, Mic Locker, AI Enhancer, Plugins &amp; Master Limiter.
-            </p>
-          </div>
-
-          <div className="md:col-span-4 flex items-center gap-2">
-            <select
-              value={exportOptions.stemSelection}
-              onChange={(e) => setExportOptions({ ...exportOptions, stemSelection: e.target.value as any })}
-              className="bg-slate-900 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg border border-slate-700 font-mono focus:outline-none focus:border-cyan-500 cursor-pointer"
-            >
-              <option value="master">Full Synergistic Master Mix</option>
-              <option value="vocal_only">Tuned &amp; Enhanced Vocal Stem Only</option>
-              <option value="beat_only">Groove Beat Stem Only</option>
-            </select>
-
-            <select
-              value={exportOptions.format}
-              onChange={(e) => setExportOptions({ ...exportOptions, format: e.target.value as any })}
-              className="bg-slate-900 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg border border-slate-700 font-mono focus:outline-none focus:border-cyan-500 cursor-pointer"
-            >
-              <option value="wav_24bit">24-Bit / 48kHz WAV</option>
-              <option value="wav_16bit">16-Bit / 44.1kHz WAV</option>
-            </select>
-          </div>
-
-          <div className="md:col-span-3 flex justify-end">
-            <button
-              onClick={handleQuickExport}
-              disabled={isExporting}
-              className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg ${
-                isExporting
-                  ? 'bg-slate-800 text-slate-400 border border-slate-700 animate-pulse'
-                  : 'bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-400 hover:to-amber-400 text-white shadow-pink-500/20'
-              }`}
-            >
-              {isExporting ? (
-                <>
-                  <Disc className="w-4 h-4 animate-spin text-white" />
-                  <span>Rendering DSP Graph...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>Render &amp; Save to Library</span>
-                </>
-              )}
-            </button>
-          </div>
+        {/* Dedicated Advanced Studio Export Section */}
+        <div className="mt-5">
+          <AdvancedExportSection
+            onExportComplete={(newAsset) => {
+              setAssets(audioEngine.getLibraryAssets());
+              setExportSuccessMessage(`Rendered & saved: ${newAsset.name} (${newAsset.fileSize})`);
+              setTimeout(() => setExportSuccessMessage(null), 6000);
+              onTracksChanged?.();
+            }}
+          />
         </div>
 
         {exportSuccessMessage && (
@@ -508,13 +515,14 @@ export const LibrarySection: React.FC<LibrarySectionProps> = ({ onTracksChanged,
                       <span>{isPlaying ? 'Pause' : 'Preview'}</span>
                     </button>
 
-                    {/* Download WAV */}
+                    {/* Download WAV / MP3 */}
                     <button
                       onClick={() => handleDownload(asset)}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-                      title="Download audio file"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition cursor-pointer text-xs font-semibold border border-slate-700/80 active:scale-95 shadow-sm"
+                      title={`Download "${asset.name}" to your device`}
                     >
-                      <Download className="w-3.5 h-3.5" />
+                      <Download className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      <span className="hidden sm:inline">Save</span>
                     </button>
                   </div>
 

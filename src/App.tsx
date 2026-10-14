@@ -43,6 +43,8 @@ import { SettingsModal } from './components/SettingsModal';
 import { AutoMixModal } from './components/AutoMixModal';
 import { AutoPresetBeatMixModal } from './components/AutoPresetBeatMixModal';
 import { GoogleDriveModal } from './components/GoogleDriveModal';
+import { ToastContainer } from './components/ToastContainer';
+import { showToast } from './utils/toast';
 import { PerformanceOptimizerModal } from './components/PerformanceOptimizerModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { launchGooglePicker } from './services/googlePickerService';
@@ -229,7 +231,10 @@ export default function App() {
 
   // Subscribe to audio engine track, synergy, and recording events
   useEffect(() => {
-    const unsubTracks = audioEngine.subscribeTracks(setTracks);
+    const unsubTracks = audioEngine.subscribeTracks((updatedTracks) => {
+      setTracks(updatedTracks);
+      setDuration(audioEngine.getDuration());
+    });
     const unsubSynergy = audioEngine.subscribeSynergy(setSynergySettings);
     const unsubRecord = audioEngine.subscribeRecordingStatus(setRecordingStatus);
     return () => {
@@ -379,7 +384,7 @@ export default function App() {
       setIsLiveMic(active);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Microphone error: ${msg}`);
+      showToast(`Microphone error: ${msg}`, 'error');
     }
   };
 
@@ -393,7 +398,7 @@ export default function App() {
       await audioEngine.startRecording(options);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Recording Error: ${msg}`);
+      showToast(`Recording Error: ${msg}`, 'error');
     }
   };
 
@@ -1052,6 +1057,9 @@ export default function App() {
       {/* Offline Connectivity Notification Indicator */}
       <OfflineIndicator />
 
+      {/* Global In-App Toast Notifications */}
+      <ToastContainer />
+
       {/* Studio Footer Status Bar */}
       <footer className="hidden sm:block border-t border-slate-800/80 bg-slate-950/80 px-4 py-2.5 text-[11px] font-mono text-slate-400 pb-2.5">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
@@ -1077,10 +1085,12 @@ export default function App() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsOptimizerModalOpen(true)}
-              className="hover:text-cyan-300 transition cursor-pointer"
-              title="Buffer & Sample Rate Settings"
+              className="hover:text-cyan-300 transition cursor-pointer flex items-center gap-1.5"
+              title="Buffer & High-RAM Cache Settings"
             >
-              Buffer: <span className="text-cyan-400 font-bold">{audioEngine.performanceConfig.bufferSize || 128} smp (Direct)</span>
+              <span>Buffer: <strong className="text-cyan-400 font-bold">{audioEngine.performanceConfig.bufferSize || 256} smp</strong></span>
+              <span>&bull;</span>
+              <span>RAM Cache: <strong className="text-violet-400 font-bold">{audioEngine.performanceConfig.maxMemoryCacheMb >= 1024 ? `${(audioEngine.performanceConfig.maxMemoryCacheMb / 1024).toFixed(0)}GB` : `${audioEngine.performanceConfig.maxMemoryCacheMb}MB`}</strong></span>
             </button>
             <span>&bull;</span>
             <span>Sample Rate: 48kHz 32-bit</span>

@@ -1,8 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { AudioMetrics, MasteringSettings, AutoMixPresetId, AutoMixResult } from '../types';
+import { AudioMetrics, MasteringSettings, AutoMixPresetId, AutoMixResult, ExportQualityId } from '../types';
 import { audioEngine, audioBufferToWavBlob, extractWaveformPeaks } from '../audio/audioEngine';
 import { AUTO_MIX_PRESETS, executeOfflineAutoMix, applyAutoMixToLiveEngine } from '../audio/autoMixEngine';
 import { loadStudioSettings } from '../audio/settingsStorage';
+import { showToast } from '../utils/toast';
+import { downloadBlob } from '../utils/downloadHelper';
+import { encodeAudioBufferToBlob } from '../audio/exportEncoder';
 import {
   Sliders,
   Download,
@@ -29,6 +32,9 @@ export const MasteringSuite: React.FC<MasteringSuiteProps> = ({ settings, onChan
   const [isBouncing, setIsBouncing] = useState(false);
   const [bounceSuccess, setBounceSuccess] = useState(false);
   const [savedAssetName, setSavedAssetName] = useState<string | null>(null);
+  const [lastBouncedBlob, setLastBouncedBlob] = useState<Blob | null>(null);
+  const [lastBouncedName, setLastBouncedName] = useState<string | null>(null);
+  const [masteringFormat, setMasteringFormat] = useState<ExportQualityId>('wav_32float');
 
   // AI Auto-Mix States
   const [showAutoMix, setShowAutoMix] = useState(true);
@@ -44,38 +50,40 @@ export const MasteringSuite: React.FC<MasteringSuiteProps> = ({ settings, onChan
   const handleOfflineBounce = async () => {
     setIsBouncing(true);
     setBounceSuccess(false);
-    setSavedAssetName(null);
 
     try {
+      await audioEngine.initialize();
+      // If no stems are currently in the session, automatically load studio demo stems so export succeeds
+      if (!audioEngine.getVocalBuffer() && !audioEngine.getBeatBuffer()) {
+        showToast('Loading studio demo stems for master bounce...', 'info');
+        await audioEngine.loadDemoStems('rap_f_minor');
+      }
+
       const userSettings = loadStudioSettings();
       const res = await audioEngine.renderOfflineBounce({
         stemSelection: 'master',
-        format: userSettings.exportQuality || 'wav_24bit',
+        format: masteringFormat,
         sampleRate: userSettings.sampleRate || 48000,
         renderSpeed: userSettings.renderSpeed || 'balanced_studio',
+        bitDepth: masteringFormat === 'wav_32float' ? 32 : masteringFormat === 'wav_24bit' ? 24 : 16,
+        audioFormat: masteringFormat.startsWith('mp3') ? 'mp3' : 'wav',
       });
 
-      const wavBlob = res;
-      const downloadName = res.asset?.name || `NeuralTune_Ultra_Master_${Date.now()}.wav`;
+      const ext = masteringFormat.startsWith('mp3') ? 'mp3' : 'wav';
+      const downloadName = res.asset?.name || `NeuralTune_Ultra_Master_${Date.now()}.${ext}`;
+      const wavBlob: Blob = res.asset?.blob || (res as Blob);
 
-      const url = URL.createObjectURL(wavBlob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = downloadName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      URL.revokeObjectURL(url);
-
-      setSavedAssetName(res.asset?.name || 'Master WAV');
+      setLastBouncedBlob(wavBlob);
+      setLastBouncedName(downloadName);
+      setSavedAssetName(downloadName);
       setBounceSuccess(true);
-      setTimeout(() => {
-        setBounceSuccess(false);
-        setSavedAssetName(null);
-      }, 5000);
+      setTimeout(() => setBounceSuccess(false), 4000);
+
+      // Trigger safe download that preserves blob stream on mobile and desktop
+      downloadBlob(wavBlob, downloadName);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Mastering bounce failed: ${msg}`);
+      showToast(`Mastering bounce failed: ${msg}`, 'error');
     } finally {
       setIsBouncing(false);
     }
@@ -99,7 +107,17 @@ export const MasteringSuite: React.FC<MasteringSuiteProps> = ({ settings, onChan
       }
 
       if (!sourceBuffer) {
-        throw new Error('No audio tracks loaded. Please record or load audio stems first into your project!');
+        setAutoMixProgress('Loading studio demo stems for AI Auto-Mix...');
+        await audioEngine.loadDemoStems('rap_f_minor');
+        sourceBuffer = selectedStemSource === 'vocal'
+          ? audioEngine.getVocalBuffer()
+          : selectedStemSource === 'beat'
+          ? audioEngine.getBeatBuffer()
+          : audioEngine.getMasterSourceBuffer();
+      }
+
+      if (!sourceBuffer) {
+        throw new Error('Unable to prepare audio buffer. Please upload or record a stem in the Timeline.');
       }
 
       setAutoMixProgress('Detecting frequency balance & integrated LUFS...');
@@ -110,9 +128,10 @@ export const MasteringSuite: React.FC<MasteringSuiteProps> = ({ settings, onChan
 
       setAutoMixResult(result);
       setAutoMixProgress('Auto-mix master completed!');
+      showToast('AI Auto-Mix Master ready! Audition or Download below.', 'success');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`AI Auto-Mix failed: ${msg}`);
+      showToast(`AI Auto-Mix failed: ${msg}`, 'error');
     } finally {
       setIsAutoMixing(false);
     }
@@ -127,17 +146,11 @@ export const MasteringSuite: React.FC<MasteringSuiteProps> = ({ settings, onChan
 
   const handleDownloadAutoMasteredWav = () => {
     if (!autoMixResult) return;
-    const blob = audioBufferToWavBlob(autoMixResult.masteredBuffer, 24);
-    const fileName = `NeuralTune_AIMaster_${autoMixResult.presetId}_${Date.now().toString().slice(-6)}.wav`;
+    const { blob, extension } = encodeAudioBufferToBlob(autoMixResult.masteredBuffer, masteringFormat);
+    const fileName = `NeuralTune_AIMaster_${autoMixResult.presetId}_${Date.now().toString().slice(-6)}${extension}`;
 
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = fileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    // Download file safely to device
+    downloadBlob(blob, fileName);
 
     audioEngine.addLibraryAsset({
       id: `aimaster_${Date.now()}`,
@@ -146,13 +159,13 @@ export const MasteringSuite: React.FC<MasteringSuiteProps> = ({ settings, onChan
       timestamp: Date.now(),
       duration: autoMixResult.masteredBuffer.duration,
       fileSize: `${(blob.size / (1024 * 1024)).toFixed(2)} MB`,
-      format: 'WAV',
+      format: extension.toUpperCase().replace('.', '') as 'WAV' | 'MP3',
       sampleRate: 48000,
       blob,
       audioUrl: URL.createObjectURL(blob),
       presetName: autoMixResult.presetName,
       peaks: extractWaveformPeaks(autoMixResult.masteredBuffer, 80),
-      notes: `AI Auto-Mastered via ${autoMixResult.presetName} • Boosted +${autoMixResult.lufsBoostDb} LUFS (${autoMixResult.outputAnalysis.lufs} LUFS target)`,
+      notes: `AI Auto-Mastered via ${autoMixResult.presetName} (${masteringFormat.toUpperCase()}) • Boosted +${autoMixResult.lufsBoostDb} LUFS (${autoMixResult.outputAnalysis.lufs} LUFS target)`,
     });
   };
 
@@ -251,6 +264,54 @@ export const MasteringSuite: React.FC<MasteringSuiteProps> = ({ settings, onChan
             {settings.enabled ? 'ACTIVE' : 'BYPASS'}
           </button>
 
+          {/* Mastering Export Quality Selector */}
+          <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-lg p-0.5">
+            <button
+              onClick={() => setMasteringFormat('wav_32float')}
+              className={`px-2 py-1 rounded text-[11px] font-mono font-bold transition cursor-pointer flex items-center gap-1 ${
+                masteringFormat === 'wav_32float'
+                  ? 'bg-amber-400 text-slate-950 font-black shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="32-Bit Floating Point Studio Quality Audio (Infinite Headroom)"
+            >
+              <span>💎 32-Bit</span>
+            </button>
+            <button
+              onClick={() => setMasteringFormat('wav_24bit')}
+              className={`px-2 py-1 rounded text-[11px] font-mono font-bold transition cursor-pointer ${
+                masteringFormat === 'wav_24bit'
+                  ? 'bg-cyan-500 text-slate-950 font-black shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="24-Bit PCM WAV Studio Master"
+            >
+              24-Bit
+            </button>
+            <button
+              onClick={() => setMasteringFormat('wav_16bit')}
+              className={`px-2 py-1 rounded text-[11px] font-mono font-bold transition cursor-pointer ${
+                masteringFormat === 'wav_16bit'
+                  ? 'bg-purple-500 text-white font-black shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="16-Bit PCM WAV CD Audio"
+            >
+              16-Bit
+            </button>
+            <button
+              onClick={() => setMasteringFormat('mp3_320')}
+              className={`px-2 py-1 rounded text-[11px] font-mono font-bold transition cursor-pointer ${
+                masteringFormat === 'mp3_320'
+                  ? 'bg-rose-500 text-white font-black shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="320kbps MP3 Broadcast Audio"
+            >
+              MP3
+            </button>
+          </div>
+
           {/* Offline Bounce Button */}
           <button
             id="btn-offline-bounce"
@@ -261,24 +322,34 @@ export const MasteringSuite: React.FC<MasteringSuiteProps> = ({ settings, onChan
                 ? 'bg-emerald-500 text-slate-950 shadow-emerald-500/30'
                 : isBouncing
                 ? 'bg-slate-800 text-slate-400 border border-slate-700 animate-pulse'
+                : masteringFormat === 'wav_32float'
+                ? 'bg-gradient-to-r from-amber-400 to-rose-500 text-slate-950 font-black shadow-amber-500/20 hover:brightness-110 ring-1 ring-amber-300/50'
                 : 'bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200'
             }`}
-            title="Renders the entire vocal session through the DSP graph into studio 24-bit 48kHz WAV audio"
+            title="Renders the entire vocal session through the DSP graph into studio quality audio"
           >
             {isBouncing ? (
               <>
                 <Disc className="w-4 h-4 animate-spin" />
-                <span>Bouncing...</span>
+                <span>Bouncing Master...</span>
               </>
             ) : bounceSuccess ? (
               <>
                 <Check className="w-4 h-4 text-slate-950" />
-                <span>WAV Downloaded!</span>
+                <span>Master Downloaded!</span>
               </>
             ) : (
               <>
                 <Download className="w-4 h-4" />
-                <span>Export Master WAV</span>
+                <span>
+                  {masteringFormat === 'wav_32float'
+                    ? 'Export 32-Bit Studio Master'
+                    : masteringFormat === 'wav_24bit'
+                    ? 'Export 24-Bit WAV Master'
+                    : masteringFormat === 'wav_16bit'
+                    ? 'Export 16-Bit CD Master'
+                    : 'Export 320k MP3 Master'}
+                </span>
               </>
             )}
           </button>
@@ -286,14 +357,33 @@ export const MasteringSuite: React.FC<MasteringSuiteProps> = ({ settings, onChan
       </div>
 
       {savedAssetName && (
-        <div className="mt-3 flex items-center justify-between p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-300 font-mono">
+        <div className="mt-3 flex flex-wrap items-center justify-between p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-300 font-mono gap-2 animate-fade-in">
           <div className="flex items-center gap-2">
             <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Master render complete: <strong>{savedAssetName}</strong> downloaded and saved to your Studio Library!</span>
+            <span>Master render complete: <strong>{savedAssetName}</strong></span>
           </div>
-          <span className="text-[10px] bg-emerald-900/60 px-2 py-0.5 rounded text-emerald-200 border border-emerald-500/30">
-            24-Bit / 48kHz WAV
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] bg-emerald-900/60 px-2 py-0.5 rounded text-emerald-200 border border-emerald-500/30 font-bold uppercase">
+              {masteringFormat === 'wav_32float' ? '💎 32-Bit Float Studio WAV' : masteringFormat.toUpperCase().replace('_', ' ')}
+            </span>
+            {lastBouncedBlob && (
+              <button
+                onClick={() => downloadBlob(lastBouncedBlob, lastBouncedName || savedAssetName)}
+                className="px-2.5 py-1 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1 transition cursor-pointer shadow-sm active:scale-95"
+                title="Save master file to device"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download Again</span>
+              </button>
+            )}
+            <button
+              onClick={() => setSavedAssetName(null)}
+              className="text-slate-400 hover:text-white px-1.5 py-0.5 rounded text-xs transition"
+              title="Dismiss"
+            >
+              &times;
+            </button>
+          </div>
         </div>
       )}
 

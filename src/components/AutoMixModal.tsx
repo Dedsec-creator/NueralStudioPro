@@ -20,6 +20,8 @@ import { audioEngine } from '../audio/audioEngine';
 import { AUTO_MIX_PRESETS, executeOfflineAutoMix, analyzeAudioBuffer } from '../audio/autoMixEngine';
 import { encodeAudioBufferToBlob } from '../audio/exportEncoder';
 import { DEFAULT_STUDIO_SETTINGS, loadStudioSettings } from '../audio/settingsStorage';
+import { showToast } from '../utils/toast';
+import { downloadBlob } from '../utils/downloadHelper';
 
 interface AutoMixModalProps {
   isOpen: boolean;
@@ -86,35 +88,23 @@ export const AutoMixModal: React.FC<AutoMixModalProps> = ({
 
   // Execute the offline auto mix engine
   const handleStartAutoMix = async () => {
-    let sourceBuffer: AudioBuffer | null = null;
+    await audioEngine.initialize();
+    if (!audioEngine.vocalBuffer && !audioEngine.beatBuffer) {
+      showToast('Loading studio demo stems for AI Auto-Mix...', 'info');
+      await audioEngine.loadDemoStems('rap_f_minor');
+    }
 
+    let sourceBuffer: AudioBuffer | null = null;
     if (selectedStem === 'vocal') {
-      sourceBuffer = audioEngine.vocalBuffer;
+      sourceBuffer = audioEngine.getVocalBuffer();
     } else if (selectedStem === 'beat') {
-      sourceBuffer = audioEngine.beatBuffer;
+      sourceBuffer = audioEngine.getBeatBuffer();
     } else {
-      // Full Mix: If both stems exist, render quick sum buffer
-      if (audioEngine.vocalBuffer && audioEngine.beatBuffer) {
-        const vBuf = audioEngine.vocalBuffer;
-        const bBuf = audioEngine.beatBuffer;
-        const maxLen = Math.max(vBuf.length, bBuf.length);
-        const ctx = new OfflineAudioContext(2, maxLen, vBuf.sampleRate);
-        const vSource = ctx.createBufferSource();
-        vSource.buffer = vBuf;
-        const bSource = ctx.createBufferSource();
-        bSource.buffer = bBuf;
-        vSource.connect(ctx.destination);
-        bSource.connect(ctx.destination);
-        vSource.start(0);
-        bSource.start(0);
-        sourceBuffer = await ctx.startRendering();
-      } else {
-        sourceBuffer = audioEngine.vocalBuffer || audioEngine.beatBuffer;
-      }
+      sourceBuffer = audioEngine.getMasterSourceBuffer();
     }
 
     if (!sourceBuffer) {
-      alert('Please upload a vocal track or beat first to run AI Auto-Mix.');
+      showToast('Please upload a vocal track or beat first to run AI Auto-Mix.', 'warning');
       return;
     }
 
@@ -159,7 +149,7 @@ export const AutoMixModal: React.FC<AutoMixModalProps> = ({
       setPreviewAudioUrl(url);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Auto-Mix error: ${msg}`);
+      showToast(`Auto-Mix error: ${msg}`, 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -213,12 +203,8 @@ export const AutoMixModal: React.FC<AutoMixModalProps> = ({
   const handleDownloadMaster = () => {
     if (!result) return;
     const { blob, extension } = encodeAudioBufferToBlob(result.masteredBuffer, effectiveSettings.exportQuality);
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `AutoMix_${activePresetDef.name.replace(/\s+/g, '_')}_${Date.now().toString().slice(-5)}${extension}`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    const fileName = `AutoMix_${activePresetDef.name.replace(/\s+/g, '_')}_${Date.now().toString().slice(-5)}${extension}`;
+    downloadBlob(blob, fileName);
   };
 
   const handleApplyToLiveStudio = () => {

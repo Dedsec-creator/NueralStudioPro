@@ -2102,7 +2102,7 @@ export const EXPANDED_ARTIST_PRESETS: ArtistVocalPreset[] = [
   // KENDRICK LAMAR
   // ==========================================
   {
-    id: 'preset-kendrick-not-like-us',
+    id: 'preset-kendrick-not-like-us-bite',
     name: 'Not Like Us (West Coast Bite)',
     artist: 'Kendrick Lamar',
     song: 'Not Like Us',
@@ -3206,7 +3206,7 @@ export const EXPANDED_ARTIST_PRESETS: ArtistVocalPreset[] = [
     ],
   },
   {
-    id: 'preset-weeknd-starboy',
+    id: 'preset-weeknd-starboy-pop',
     name: 'Starboy (Crisp Modern Pop)',
     artist: 'The Weeknd',
     song: 'Starboy',
@@ -3291,7 +3291,7 @@ export const EXPANDED_ARTIST_PRESETS: ArtistVocalPreset[] = [
   // BILLIE EILISH
   // ==========================================
   {
-    id: 'preset-billie-birds-feather',
+    id: 'preset-billie-birds-feather-whisper',
     name: 'Birds of a Feather (Intimate Whisper)',
     artist: 'Billie Eilish',
     song: 'Birds of a Feather',
@@ -3634,7 +3634,7 @@ export const EXPANDED_ARTIST_PRESETS: ArtistVocalPreset[] = [
   // POST MALONE
   // ==========================================
   {
-    id: 'preset-post-circles',
+    id: 'preset-post-circles-tremolo',
     name: 'Circles (Melodic Tremolo & Tube)',
     artist: 'Post Malone',
     song: 'Circles',
@@ -4065,7 +4065,7 @@ export const EXPANDED_ARTIST_PRESETS: ArtistVocalPreset[] = [
   // SABRINA CARPENTER
   // ==========================================
   {
-    id: 'preset-sabrina-espresso',
+    id: 'preset-sabrina-espresso-disco',
     name: 'Espresso (Crystalline Whisper Pop)',
     artist: 'Sabrina Carpenter',
     song: 'Espresso',

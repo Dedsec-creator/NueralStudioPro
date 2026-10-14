@@ -18,9 +18,13 @@ import {
   Redo2,
   Volume2,
   Zap,
+  Download,
+  Disc,
 } from 'lucide-react';
 import { NeuralTuneAudioEngine } from '../audio/audioEngine';
 import { PitchFormantSettings, RecordingStatus, TrackStemInfo } from '../types';
+import { downloadBlob } from '../utils/downloadHelper';
+import { showToast } from '../utils/toast';
 
 interface BottomTransportDockProps {
   audioEngine: NeuralTuneAudioEngine;
@@ -68,11 +72,13 @@ export const BottomTransportDock: React.FC<BottomTransportDockProps> = ({
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
+  const [isBouncing, setIsBouncing] = useState(false);
 
   const vocalSpeed = vocalTrack.playbackRate || audioEngine.vocalPlaybackRate || 1.0;
   const beatSpeed = beatTrack.playbackRate || audioEngine.beatPlaybackRate || 1.0;
 
   const formatTime = (secs: number) => {
+    if (!Number.isFinite(secs) || isNaN(secs) || secs < 0) return '00:00.0';
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     const ms = Math.floor((secs % 1) * 10);
@@ -81,7 +87,10 @@ export const BottomTransportDock: React.FC<BottomTransportDockProps> = ({
 
   const currentDisplayTime = isSeeking ? seekValue : currentTime;
   const safeDuration = duration > 0 ? duration : 12.0;
-  const progressPct = Math.min(100, Math.max(0, (currentDisplayTime / safeDuration) * 100));
+  const rawProgress = (currentDisplayTime / safeDuration) * 100;
+  const progressPct = Number.isFinite(rawProgress) && !isNaN(rawProgress)
+    ? Math.min(100, Math.max(0, rawProgress))
+    : 0;
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
@@ -99,7 +108,7 @@ export const BottomTransportDock: React.FC<BottomTransportDockProps> = ({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 shadow-[0_-8px_30px_rgba(0,0,0,0.8)]">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 shadow-[0_-8px_30px_rgba(0,0,0,0.8)] pb-[max(env(safe-area-inset-bottom,0px),6px)] sm:pb-1">
       {/* Top micro progress highlight */}
       <div className="w-full h-1 bg-slate-800/80 relative overflow-hidden">
         <div
@@ -408,6 +417,45 @@ export const BottomTransportDock: React.FC<BottomTransportDockProps> = ({
               </div>
             )}
           </div>
+
+          {/* Quick Master Bounce Button */}
+          <button
+            id="dock-btn-bounce"
+            onClick={async () => {
+              if (isBouncing) return;
+              setIsBouncing(true);
+              try {
+                await audioEngine.initialize();
+                if (!audioEngine.getVocalBuffer() && !audioEngine.getBeatBuffer()) {
+                  showToast('Loading studio demo stems for master bounce...', 'info');
+                  await audioEngine.loadDemoStems('rap_f_minor');
+                }
+                const res = await audioEngine.renderOfflineBounce({
+                  stemSelection: 'master',
+                  format: 'wav_24bit',
+                  sampleRate: 48000,
+                });
+                const blob = res.asset?.blob || (res as unknown as Blob);
+                const name = res.asset?.name || `NeuralTune_Studio_Master_${Date.now()}.wav`;
+                downloadBlob(blob, name);
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                showToast(`Bounce failed: ${msg}`, 'error');
+              } finally {
+                setIsBouncing(false);
+              }
+            }}
+            disabled={isBouncing}
+            className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 transition cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95"
+            title="1-Click export and download 24-bit studio mixdown master"
+          >
+            {isBouncing ? (
+              <Disc className="w-3.5 h-3.5 animate-spin text-slate-950" />
+            ) : (
+              <Download className="w-3.5 h-3.5 text-slate-950" />
+            )}
+            <span className="hidden xl:inline">{isBouncing ? 'Bouncing...' : 'Bounce Master'}</span>
+          </button>
         </div>
       </div>
     </div>

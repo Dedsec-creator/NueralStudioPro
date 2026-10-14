@@ -25,9 +25,12 @@ import {
   Volume2,
   VolumeX,
   Zap,
+  Download,
+  Disc,
 } from 'lucide-react';
 import { audioEngine } from '../audio/audioEngine';
 import { PocketRideStyle, RecordingStatus, SynergyPocketSettings, TrackStemInfo } from '../types';
+import { downloadBlob, downloadAudioBuffer } from '../utils/downloadHelper';
 
 interface WaveformTimelineProps {
   isPlaying: boolean;
@@ -115,6 +118,51 @@ export const WaveformTimeline: React.FC<WaveformTimelineProps> = ({
   const [isDraggingBeat, setIsDraggingBeat] = useState(false);
   const [alignToast, setAlignToast] = useState<string | null>(null);
   const [isLoadingDemo, setIsLoadingDemo] = useState(false);
+  const [isQuickBouncing, setIsQuickBouncing] = useState(false);
+
+  const handleQuickBounce = async () => {
+    setIsQuickBouncing(true);
+    try {
+      await audioEngine.initialize();
+      if (!audioEngine.getVocalBuffer() && !audioEngine.getBeatBuffer()) {
+        showToast('Loading studio demo stems for master bounce...');
+        await audioEngine.loadDemoStems('rap_f_minor');
+      }
+      const res = await audioEngine.renderOfflineBounce({
+        stemSelection: 'master',
+        format: 'wav_24bit',
+        sampleRate: 48000,
+      });
+      const blob = res.asset?.blob || (res as unknown as Blob);
+      const name = res.asset?.name || `NeuralTune_Studio_Master_${Date.now()}.wav`;
+      downloadBlob(blob, name);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`Master bounce failed: ${msg}`);
+    } finally {
+      setIsQuickBouncing(false);
+    }
+  };
+
+  const handleDownloadVocalStem = () => {
+    const vBuf = audioEngine.getVocalBuffer();
+    if (!vBuf) {
+      showToast('No vocal stem audio loaded to download.');
+      return;
+    }
+    const name = `${(vocalTrack.name || 'Vocal_Track').replace(/\.[^/.]+$/, '')}_Stem.wav`;
+    downloadAudioBuffer(vBuf, name, 'wav_24bit');
+  };
+
+  const handleDownloadBeatStem = () => {
+    const bBuf = audioEngine.getBeatBuffer();
+    if (!bBuf) {
+      showToast('No beat stem audio loaded to download.');
+      return;
+    }
+    const name = `${(beatTrack.name || 'Beat_Track').replace(/\.[^/.]+$/, '')}_Stem.wav`;
+    downloadAudioBuffer(bBuf, name, 'wav_24bit');
+  };
 
   const handleLoadDemo = async () => {
     setIsLoadingDemo(true);
@@ -131,6 +179,7 @@ export const WaveformTimeline: React.FC<WaveformTimelineProps> = ({
   };
 
   const formatTime = (seconds: number) => {
+    if (!Number.isFinite(seconds) || isNaN(seconds) || seconds < 0) return '00:00.00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     const millis = Math.floor((seconds % 1) * 100);
@@ -181,7 +230,10 @@ export const WaveformTimeline: React.FC<WaveformTimelineProps> = ({
     showToast(`Applied "${style.replace('_', ' ').toUpperCase()}" ride pocket`);
   };
 
-  const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const rawProgress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPct = Number.isFinite(rawProgress) && !isNaN(rawProgress)
+    ? Math.max(0, Math.min(100, rawProgress))
+    : 0;
 
   const hasVocalAudio = Boolean(vocalTrack.duration > 0 && vocalTrack.name && vocalTrack.name !== 'No vocal track loaded');
   const hasBeatAudio = Boolean(beatTrack.duration > 0 && beatTrack.name && beatTrack.name !== 'No beat track loaded');
@@ -197,7 +249,8 @@ export const WaveformTimeline: React.FC<WaveformTimelineProps> = ({
 
   // Calculate visual pixel shift for vocal lane based on alignment offset
   // e.g. +30ms offset on duration = (0.030 / duration) * 100 % shift
-  const visualOffsetPct = duration > 0 ? ((synergySettings.alignOffsetMs || 0) / 1000 / duration) * 100 : 0;
+  const rawVisualOffset = duration > 0 ? ((synergySettings.alignOffsetMs || 0) / 1000 / duration) * 100 : 0;
+  const visualOffsetPct = Number.isFinite(rawVisualOffset) && !isNaN(rawVisualOffset) ? rawVisualOffset : 0;
 
   return (
     <div className="rounded-2xl bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-950 border border-slate-800 p-4 sm:p-5 shadow-2xl backdrop-blur-md space-y-4">
@@ -380,6 +433,27 @@ export const WaveformTimeline: React.FC<WaveformTimelineProps> = ({
               <span>Auto-Mix</span>
             </button>
           )}
+
+          {/* Quick Bounce Master WAV Button */}
+          <button
+            id="btn-waveform-quick-bounce"
+            onClick={handleQuickBounce}
+            disabled={isQuickBouncing}
+            className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-3.5 h-11 rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition cursor-pointer text-xs uppercase tracking-wider"
+            title="1-Click export and download studio mixdown WAV master"
+          >
+            {isQuickBouncing ? (
+              <>
+                <Disc className="w-4 h-4 animate-spin text-slate-950" />
+                <span>Bouncing...</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4 text-slate-950" />
+                <span>Bounce Master</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -479,6 +553,15 @@ export const WaveformTimeline: React.FC<WaveformTimelineProps> = ({
                   >
                     <Upload className="w-3.5 h-3.5 text-cyan-400" />
                     <span>Replace</span>
+                  </button>
+                  <button
+                    id="btn-download-vocal-stem"
+                    onClick={handleDownloadVocalStem}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition cursor-pointer shadow-sm active:scale-95"
+                    title="Export & download vocal stem WAV"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="hidden sm:inline">Stem</span>
                   </button>
                   <button
                     onClick={() => {
@@ -758,6 +841,15 @@ export const WaveformTimeline: React.FC<WaveformTimelineProps> = ({
                   >
                     <Upload className="w-3.5 h-3.5 text-amber-400" />
                     <span>Replace</span>
+                  </button>
+                  <button
+                    id="btn-download-beat-stem"
+                    onClick={handleDownloadBeatStem}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition cursor-pointer shadow-sm active:scale-95"
+                    title="Export & download beat stem WAV"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="hidden sm:inline">Stem</span>
                   </button>
                   <button
                     onClick={() => {
