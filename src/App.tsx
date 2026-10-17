@@ -113,7 +113,7 @@ export default function App() {
   const [isGoogleDriveModalOpen, setIsGoogleDriveModalOpen] = useState(false);
   const [isOptimizerModalOpen, setIsOptimizerModalOpen] = useState(false);
   const [googleDriveTargetTrack, setGoogleDriveTargetTrack] = useState<'vocal' | 'beat'>('beat');
-  const [activeSection, setActiveSection] = useState<StudioSectionId>('presets');
+  const [activeSection, setActiveSection] = useState<StudioSectionId>('tracks');
   const [activePreset, setActivePreset] = useState<ArtistVocalPreset>(FACTORY_ARTIST_PRESETS[0]);
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus>(audioEngine.getRecordingStatus());
 
@@ -770,7 +770,7 @@ export default function App() {
       {/* Auto-Save Crash Recovery Banner */}
       {sessionRecoveryNotice && (
         <div className="max-w-7xl mx-auto px-3 sm:px-5 pt-3">
-          <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-gradient-to-r from-emerald-950/80 via-slate-900/90 to-cyan-950/80 border border-emerald-500/40 text-emerald-200 text-xs shadow-lg backdrop-blur-md">
+          <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-gradient-to-r from-emerald-950/80 via-slate-900/90 to-cyan-950/80 border border-emerald-500/40 text-emerald-200[...]">
             <div className="flex items-center gap-2.5">
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span>
@@ -940,7 +940,7 @@ export default function App() {
           )}
 
           {/* Section 5: Studio Asset & Render Library */}
-          {(activeSection === 'library' || activeSection === 'all') && (
+          {(activeSection === 'library' || active Section === 'all') && (
             <div>
               <LibrarySection
                 onOpenGoogleDrive={() => handleOpenGoogleDrive('beat')}
@@ -1090,15 +1090,4 @@ export default function App() {
             >
               <span>Buffer: <strong className="text-cyan-400 font-bold">{audioEngine.performanceConfig.bufferSize || 256} smp</strong></span>
               <span>&bull;</span>
-              <span>RAM Cache: <strong className="text-violet-400 font-bold">{audioEngine.performanceConfig.maxMemoryCacheMb >= 1024 ? `${(audioEngine.performanceConfig.maxMemoryCacheMb / 1024).toFixed(0)}GB` : `${audioEngine.performanceConfig.maxMemoryCacheMb}MB`}</strong></span>
-            </button>
-            <span>&bull;</span>
-            <span>Sample Rate: 48kHz 32-bit</span>
-            <span>&bull;</span>
-            <span className="text-emerald-400 font-medium">Direct Stream (Online)</span>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
-}
+              <span>RAM Cache: <strong className="text-violet-400 font-bold">{audioEngine.performanceConfig.maxMemoryCacheMb >= 1024 ? `${(audioEngine.performanceConfig.maxMemoryCacheMb / 1024).[...]
