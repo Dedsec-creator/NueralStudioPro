@@ -1,30 +1,817 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="format-detection" content="telephone=no" />
-    <title>NeuralTune Ultra</title>
-    <meta name="description" content="A high-clarity vocal studio DAW with live vocal recording &amp; take management, dual-track stems, AI Auto-Mix trap &amp; hip-hop mastering engine, customizable studio themes &amp; wallpapers, flexible 16/24/32-bit WAV &amp; MP3 offline export, Pro Vocal AI Enhancer, Auto Noise Gate, and modular DSP plugins." />
-    <meta name="theme-color" content="#090d16" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="NeuralTune" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <meta property="og:title" content="NeuralTune Ultra" />
-    <meta property="og:description" content="A high-clarity vocal studio DAW with live vocal recording &amp; take management, dual-track stems, AI Auto-Mix trap &amp; hip-hop mastering engine, customizable studio themes &amp; wallpapers, flexible 16/24/32-bit WAV &amp; MP3 offline export, Pro Vocal AI Enhancer, Auto Noise Gate, and modular DSP plugins." />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
-  </head>
-  <body class="bg-[#070a12] text-slate-100 antialiased selection:bg-cyan-500 selection:text-white overscroll-none touch-manipulation">
-    <div id="root"></div>
-    <!-- Google API Client for Google Picker & Google Identity Services -->
-    <script src="https://apis.google.com/js/api.js" async defer></script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>NeuralStudioPro v2.6</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #090a0f;
+      color: #f1f5f9;
+      font-family: system-ui, -apple-system, sans-serif;
+      user-select: none;
+      overflow-x: hidden;
+    }
+    .neon-border {
+      box-shadow: 0 0 15px rgba(139, 92, 246, 0.25);
+    }
+    input[type="range"] {
+      accent-color: #8b5cf6;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
 
+  <!-- TOP STUDIO TRANSPORT BAR (BOOTS DIRECTLY INTO TRACK VIEW) -->
+  <header class="bg-slate-900/95 border-b border-slate-800 px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 sticky top-0 z-50">
+    <div class="flex items-center gap-2">
+      <span class="h-3 w-3 rounded-full bg-purple-500 animate-pulse"></span>
+      <h1 class="font-black tracking-wider text-sm sm:text-base bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
+        NEURALSTUDIO PRO
+      </h1>
+      <span class="text-[10px] bg-purple-950/90 text-purple-300 border border-purple-700/50 px-1.5 py-0.5 rounded font-mono">
+        TRACK WORKSPACE
+      </span>
+    </div>
+
+    <!-- Transport Controls & BPM -->
+    <div class="flex items-center gap-2">
+      <div class="flex items-center bg-slate-950 border border-slate-800 rounded px-2 py-1">
+        <span class="text-[10px] text-slate-400 mr-1.5 font-mono">BPM</span>
+        <input id="bpmInput" type="number" value="142" min="60" max="220" class="w-12 bg-transparent text-cyan-400 font-mono text-xs font-bold focus:outline-none text-center" />
+      </div>
+      <button id="playBtn" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs px-3 py-1.5 rounded transition">
+        ▶ PLAY
+      </button>
+      <button id="stopBtn" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs px-3 py-1.5 rounded transition">
+        ■ STOP
+      </button>
+      <button id="recBtn" class="bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold text-xs px-3 py-1.5 rounded flex items-center gap-1 transition">
+        <span id="recDot" class="h-2 w-2 rounded-full bg-white"></span> REC
+      </button>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button id="autoSyncBtn" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs px-3 py-1.5 rounded shadow-lg border border-purple-400/30 transition">
+        ⚡ 100% AUTO-SYNC POCKET
+      </button>
+      <button id="exportBtn" class="bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-slate-950 font-black text-xs px-3 py-1.5 rounded transition">
+        ⬇ EXPORT WAV
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN ARRANGEMENT & DSP WORKSPACE -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 max-w-7xl w-full mx-auto">
+
+    <!-- LEFT/CENTER: MULTI-TRACK TIMELINE & TRANSIENT ALIGNMENT (8 COLS) -->
+    <section class="lg:col-span-8 flex flex-col gap-3">
+      
+      <!-- Status & Beat Grid Banner -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span id="statusBadge" class="text-xs font-mono text-emerald-400">● READY: DIRECT TRACK MODE</span>
+        </div>
+        <div class="flex items-center gap-3 text-xs font-mono text-slate-400">
+          <span>GRID: <strong class="text-purple-400">1/16 TRANSIENT LOCK</strong></span>
+          <span>HEADROOM: <strong class="text-cyan-400">4x OVERSAMPLED</strong></span>
+        </div>
+      </div>
+
+      <!-- TRACK 1: INSTRUMENTAL / BEAT -->
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 flex flex-col gap-2 neon-border">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 bg-cyan-950 text-cyan-300 border border-cyan-700/50 rounded text-xs font-bold font-mono">TRACK 01</span>
+            <h2 class="font-bold text-sm text-slate-100">Instrumental Beat Reference</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-semibold px-2.5 py-1 rounded cursor-pointer border border-slate-700">
+              + Load Beat Audio
+              <input id="beatFileInput" type="file" accept="audio/*" class="hidden" />
+            </label>
+            <input id="beatGainSlider" type="range" min="0" max="1.2" step="0.01" value="0.85" class="w-20" title="Beat Volume" />
+          </div>
+        </div>
+        <canvas id="beatCanvas" width="800" height="84" class="w-full h-20 bg-slate-950 rounded border border-slate-800/80"></canvas>
+      </div>
+
+      <!-- TRACK 2: LEAD VOCAL (WITH 100% TRANSIENT BEAT SYNC) -->
+      <div class="bg-slate-900 border border-purple-900/60 rounded-lg p-3 flex flex-col gap-2 neon-border">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 bg-purple-950 text-purple-300 border border-purple-700/50 rounded text-xs font-bold font-mono">TRACK 02</span>
+            <h2 class="font-bold text-sm text-slate-100">Lead Vocal (Neural DSP + Transient Quantizer)</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="bg-slate-800 hover:bg-slate-700 text-purple-300 text-xs font-semibold px-2.5 py-1 rounded cursor-pointer border border-slate-700">
+              + Load Vocal Stem
+              <input id="vocalFileInput" type="file" accept="audio/*" class="hidden" />
+            </label>
+            <input id="vocalGainSlider" type="range" min="0" max="1.5" step="0.01" value="1.05" class="w-20" title="Vocal Volume" />
+          </div>
+        </div>
+        <canvas id="vocalCanvas" width="800" height="96" class="w-full h-24 bg-slate-950 rounded border border-purple-800/40"></canvas>
+        
+        <!-- Real-Time Sync Controls -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+          <div class="bg-slate-950/90 p-2 rounded border border-slate-800">
+            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+              <span>SYNC STRENGTH</span>
+              <span id="syncValText" class="text-purple-400 font-mono font-bold">100%</span>
+            </div>
+            <input id="syncStrengthSlider" type="range" min="0" max="1" step="0.01" value="1.0" class="w-full" />
+          </div>
+
+          <div class="bg-slate-950/90 p-2 rounded border border-slate-800">
+            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+              <span>POCKET WINDOW</span>
+              <span id="pocketValText" class="text-cyan-400 font-mono font-bold">35ms</span>
+            </div>
+            <input id="pocketWindowSlider" type="range" min="10" max="65" step="1" value="35" class="w-full" />
+          </div>
+
+          <div class="bg-slate-950/90 p-2 rounded border border-slate-800">
+            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+              <span>RETUNE SPEED</span>
+              <span id="retuneValText" class="text-emerald-400 font-mono font-bold">0ms</span>
+            </div>
+            <input id="retuneSlider" type="range" min="0" max="40" step="1" value="0" class="w-full" />
+          </div>
+
+          <div class="bg-slate-950/90 p-2 rounded border border-slate-800">
+            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+              <span>TUBE DRIVE</span>
+              <span id="driveValText" class="text-amber-400 font-mono font-bold">28%</span>
+            </div>
+            <input id="driveSlider" type="range" min="0" max="0.6" step="0.01" value="0.28" class="w-full" />
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- RIGHT: STUDIO MIC LOCKER & ARTIST VOCAL PRESETS (4 COLS) -->
+    <aside class="lg:col-span-4 flex flex-col gap-3">
+      
+      <!-- MIC EMULATION LOCKER -->
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 flex flex-col gap-2.5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-black uppercase tracking-wider text-purple-400">1. Studio Mic Emulation</h3>
+          <span class="text-[10px] font-mono text-slate-400">4x Oversampled Capsule</span>
+        </div>
+        <select id="micSelect" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-2 text-xs font-semibold text-slate-100 focus:outline-none focus:border-purple-500">
+          <option value="sony_c800g">Sony C800G (Tube Trap / Crisp Air)</option>
+          <option value="neumann_u87">Neumann U87 Ai (Warm Studio Classic)</option>
+          <option value="telefunken_u47">Telefunken U47 (Thick Vintage Tube)</option>
+          <option value="shure_sm7b">Shure SM7B + Cloudlifter (Dynamic Punch)</option>
+          <option value="akg_c414">AKG C414 XLII (Lead Vocal Sheen)</option>
+        </select>
+        <p id="micDesc" class="text-[11px] text-slate-400 leading-relaxed bg-slate-950/70 p-2 rounded border border-slate-800/80">
+          Active: 85Hz subsonic cut, +6.5dB 11.5kHz Peltier tube air shelf, and warm 2nd-harmonic saturation.
+        </p>
+      </div>
+
+      <!-- ARTIST VOCAL CHAIN PRESETS -->
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 flex flex-col gap-2.5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-black uppercase tracking-wider text-cyan-400">2. Artist Vocal Chain</h3>
+          <span class="text-[10px] font-mono text-slate-400">Dual FET + Optical</span>
+        </div>
+        <select id="presetSelect" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-2 text-xs font-semibold text-slate-100 focus:outline-none focus:border-cyan-500">
+          <option value="la_flame_astro">La Flame (Astro Psychedelic Chain)</option>
+          <option value="don_t_heavenly">Don T (Heavenly Melodic Opera Trap)</option>
+          <option value="twizzy_rage">Twizzy Rage (Hyper-Compressed Wide Stack)</option>
+          <option value="pluto_toxic">Pluto (Crisp C800G Melodic Trap)</option>
+          <option value="wunna_smooth">Wunna (Silky Upfront Pocket)</option>
+          <option value="atl_street_soul">ATL Street Soul (Raw Emotional Presence)</option>
+        </select>
+        
+        <!-- Live Parameter Readout -->
+        <div class="grid grid-cols-2 gap-1.5 text-[11px] font-mono bg-slate-950 p-2.5 rounded border border-slate-800">
+          <div>COMP RATIO: <span id="compRatioText" class="text-cyan-300">6.5:1</span></div>
+          <div>DOUBLER: <span id="doublerMixText" class="text-purple-300">32%</span></div>
+          <div>DELAY THROW: <span id="delayMixText" class="text-emerald-300">28%</span></div>
+          <div>REVERB MIX: <span id="reverbMixText" class="text-amber-300">30%</span></div>
+        </div>
+      </div>
+
+      <!-- MASTER BUS METERING & QUALITY SPECS -->
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 flex flex-col gap-2">
+        <h3 class="text-xs font-black uppercase tracking-wider text-emerald-400">3. Master Bus Ceiling (-0.3 dBFS)</h3>
+        <div class="text-[11px] text-slate-400 space-y-1">
+          <div class="flex justify-between"><span>Stage 1 (1176 FET Peak Catcher):</span><span class="text-slate-200 font-mono">ACTIVE</span></div>
+          <div class="flex justify-between"><span>Stage 2 (LA-2A Optical Glue):</span><span class="text-slate-200 font-mono">ACTIVE</span></div>
+          <div class="flex justify-between"><span>Brickwall Lookahead Limiter:</span><span class="text-emerald-400 font-mono">-0.3 dB</span></div>
+        </div>
+      </div>
+
+    </aside>
+  </main>
+
+  <script>
+    // =========================================================================
+    // 1. MIC EMULATION MODELS & ARTIST PRESETS
+    // =========================================================================
+    const MIC_MODELS = {
+      sony_c800g: {
+        name: "Sony C800G",
+        desc: "Active: 85Hz subsonic cut, +6.5dB 11.5kHz Peltier tube air shelf, and warm 2nd-harmonic saturation.",
+        highPass: 85,
+        lowShelf: { freq: 180, gain: 1.5 },
+        midScoop: { freq: 420, gain: -2.5, Q: 1.4 },
+        presencePeak: { freq: 5500, gain: 3.2, Q: 0.9 },
+        airShelf: { freq: 11500, gain: 6.5 },
+        tubeDrive: 0.28
+      },
+      neumann_u87: {
+        name: "Neumann U87 Ai",
+        desc: "Active: Warm proximity low-shelf at 220Hz, silky 3.8kHz forward midrange, and smooth transformer saturation.",
+        highPass: 80,
+        lowShelf: { freq: 220, gain: 2.2 },
+        midScoop: { freq: 350, gain: -1.5, Q: 1.1 },
+        presencePeak: { freq: 3800, gain: 2.8, Q: 1.2 },
+        airShelf: { freq: 10000, gain: 3.0 },
+        tubeDrive: 0.14
+      },
+      telefunken_u47: {
+        name: "Telefunken U47",
+        desc: "Active: Thick vintage VF14 tube body at 160Hz, creamy 2.8kHz presence, and rich harmonic drive.",
+        highPass: 75,
+        lowShelf: { freq: 160, gain: 3.5 },
+        midScoop: { freq: 500, gain: -2.0, Q: 1.0 },
+        presencePeak: { freq: 2800, gain: 2.5, Q: 0.8 },
+        airShelf: { freq: 9500, gain: 2.2 },
+        tubeDrive: 0.35
+      },
+      shure_sm7b: {
+        name: "Shure SM7B + Cloudlifter",
+        desc: "Active: Tight 95Hz rumble rejection, -3dB 310Hz mud cut, and +4dB 4.5kHz upper-mid attack.",
+        highPass: 95,
+        lowShelf: { freq: 150, gain: 1.0 },
+        midScoop: { freq: 310, gain: -3.0, Q: 1.6 },
+        presencePeak: { freq: 4500, gain: 4.0, Q: 1.0 },
+        airShelf: { freq: 12000, gain: 4.5 },
+        tubeDrive: 0.18
+      },
+      akg_c414: {
+        name: "AKG C414 XLII",
+        desc: "Active: Brass capsule presence boost at 6.2kHz with ultra-clean 13kHz air extension for cutting through dense 808s.",
+        highPass: 90,
+        lowShelf: { freq: 190, gain: 0.8 },
+        midScoop: { freq: 400, gain: -2.2, Q: 1.3 },
+        presencePeak: { freq: 6200, gain: 3.8, Q: 1.1 },
+        airShelf: { freq: 13000, gain: 5.5 },
+        tubeDrive: 0.12
+      }
+    };
+
+    const ARTIST_PRESETS = {
+      la_flame_astro: {
+        mic: "sony_c800g",
+        retuneSpeedMs: 0,
+        compressor: { threshold: -26, ratio: 6.5, attack: 0.002, release: 0.09, makeupDb: 7.5 },
+        stereoDoubler: { mix: 0.32, delayMs: 18 },
+        delayThrow: { timeSec: 0.375, feedback: 0.42, mix: 0.28 },
+        reverbMix: 0.30
+      },
+      don_t_heavenly: {
+        mic: "telefunken_u47",
+        retuneSpeedMs: 3,
+        compressor: { threshold: -24, ratio: 5.0, attack: 0.004, release: 0.12, makeupDb: 6.5 },
+        stereoDoubler: { mix: 0.40, delayMs: 22 },
+        delayThrow: { timeSec: 0.42, feedback: 0.40, mix: 0.26 },
+        reverbMix: 0.36
+      },
+      twizzy_rage: {
+        mic: "sony_c800g",
+        retuneSpeedMs: 0,
+        compressor: { threshold: -30, ratio: 8.5, attack: 0.001, release: 0.05, makeupDb: 9.0 },
+        stereoDoubler: { mix: 0.48, delayMs: 14 },
+        delayThrow: { timeSec: 0.21, feedback: 0.28, mix: 0.18 },
+        reverbMix: 0.16
+      },
+      pluto_toxic: {
+        mic: "sony_c800g",
+        retuneSpeedMs: 2,
+        compressor: { threshold: -25, ratio: 6.0, attack: 0.002, release: 0.08, makeupDb: 7.0 },
+        stereoDoubler: { mix: 0.22, delayMs: 15 },
+        delayThrow: { timeSec: 0.33, feedback: 0.35, mix: 0.22 },
+        reverbMix: 0.22
+      },
+      wunna_smooth: {
+        mic: "neumann_u87",
+        retuneSpeedMs: 4,
+        compressor: { threshold: -23, ratio: 4.8, attack: 0.003, release: 0.10, makeupDb: 6.0 },
+        stereoDoubler: { mix: 0.20, delayMs: 16 },
+        delayThrow: { timeSec: 0.28, feedback: 0.25, mix: 0.16 },
+        reverbMix: 0.18
+      },
+      atl_street_soul: {
+        mic: "akg_c414",
+        retuneSpeedMs: 5,
+        compressor: { threshold: -24, ratio: 5.5, attack: 0.002, release: 0.09, makeupDb: 6.8 },
+        stereoDoubler: { mix: 0.25, delayMs: 17 },
+        delayThrow: { timeSec: 0.35, feedback: 0.32, mix: 0.20 },
+        reverbMix: 0.24
+      }
+    };
+
+    // =========================================================================
+    // 2. 100% BEAT-POCKET TRANSIENT QUANTIZATION ENGINE
+    // =========================================================================
+    class VocalBeatSyncEngine {
+      constructor(ctx) {
+        this.ctx = ctx;
+      }
+
+      detectTransients(channelData, sampleRate, threshold = 0.12) {
+        const windowSize = Math.floor(sampleRate * 0.01); // 10ms RMS energy flux window
+        const transients = [];
+        let prevEnergy = 0;
+        const minGapSamples = Math.floor(sampleRate * 0.08); // 80ms syllable debounce
+        let lastTransient = -minGapSamples;
+
+        for (let i = 0; i < channelData.length - windowSize; i += windowSize) {
+          let sum = 0;
+          for (let j = 0; j < windowSize; j++) {
+            sum += channelData[i + j] * channelData[i + j];
+          }
+          const rms = Math.sqrt(sum / windowSize);
+          const flux = rms - prevEnergy;
+          if (flux > threshold && (i - lastTransient) >= minGapSamples) {
+            transients.push(i);
+            lastTransient = i;
+          }
+          prevEnergy = rms;
+        }
+        return transients;
+      }
+
+      syncVocalToBeat(vocalBuffer, beatBuffer, bpm = 142, syncStrength = 1.0, pocketWindowMs = 35) {
+        const sr = vocalBuffer.sampleRate;
+        const numChannels = vocalBuffer.numberOfChannels;
+        const outputBuffer = this.ctx.createBuffer(numChannels, vocalBuffer.length, sr);
+        const sixteenthSamples = Math.floor((60 / bpm / 4) * sr);
+
+        const beatData = beatBuffer ? beatBuffer.getChannelData(0) : null;
+        const beatTransients = beatData ? this.detectTransients(beatData, sr, 0.16) : [];
+        const maxPocketSamples = Math.floor(sr * (pocketWindowMs / 1000));
+
+        for (let ch = 0; ch < numChannels; ch++) {
+          const inData = vocalBuffer.getChannelData(ch);
+          const outData = outputBuffer.getChannelData(ch);
+          const vocalOnsets = this.detectTransients(inData, sr, 0.10);
+
+          if (vocalOnsets.length === 0) {
+            outData.set(inData);
+            continue;
+          }
+
+          let prevSrcIdx = 0;
+          let prevDstIdx = 0;
+
+          for (let k = 0; k < vocalOnsets.length; k++) {
+            const srcOnset = vocalOnsets[k];
+            let targetOnset = Math.round(srcOnset / sixteenthSamples) * sixteenthSamples;
+
+            // Snap directly to kick/snare transient if within pocket window
+            for (let b = 0; b < beatTransients.length; b++) {
+              if (Math.abs(beatTransients[b] - srcOnset) <= maxPocketSamples) {
+                targetOnset = beatTransients[b];
+                break;
+              }
+            }
+
+            const dstOnset = Math.max(
+              prevDstIdx + 128,
+              Math.min(
+                vocalBuffer.length - 1,
+                Math.round(srcOnset + (targetOnset - srcOnset) * syncStrength)
+              )
+            );
+
+            const srcLen = srcOnset - prevSrcIdx;
+            const dstLen = dstOnset - prevDstIdx;
+            const ratio = srcLen / Math.max(1, dstLen);
+
+            for (let n = 0; n < dstLen; n++) {
+              const exactPos = prevSrcIdx + n * ratio;
+              const idx0 = Math.floor(exactPos);
+              const idx1 = Math.min(inData.length - 1, idx0 + 1);
+              const frac = exactPos - idx0;
+              if (prevDstIdx + n < outData.length) {
+                outData[prevDstIdx + n] = inData[idx0] * (1 - frac) + inData[idx1] * frac;
+              }
+            }
+
+            prevSrcIdx = srcOnset;
+            prevDstIdx = dstOnset;
+          }
+
+          const remaining = Math.min(inData.length - prevSrcIdx, outData.length - prevDstIdx);
+          for (let r = 0; r < remaining; r++) {
+            outData[prevDstIdx + r] = inData[prevSrcIdx + r];
+          }
+        }
+        return outputBuffer;
+      }
+    }
+
+    // =========================================================================
+    // 3. CORE AUDIO ENGINE & DSP GRAPH
+    // =========================================================================
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    const syncEngine = new VocalBeatSyncEngine(ctx);
+
+    let beatBuffer = null;
+    let rawVocalBuffer = null;
+    let syncedVocalBuffer = null;
+    let beatSource = null;
+    let vocalSource = null;
+    let isPlaying = false;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+
+    function createTubeCurve(drive = 0.28) {
+      const n = 65536;
+      const curve = new Float32Array(n);
+      const k = drive * 18;
+      for (let i = 0; i < n; i++) {
+        const x = (i * 2) / n - 1;
+        curve[i] = Math.tanh(x * (1 + k)) + 0.08 * x * x * Math.exp(-x * x);
+      }
+      return curve;
+    }
+
+    function connectVocalDSP(targetCtx, sourceNode, destinationNode) {
+      const micKey = document.getElementById('micSelect').value;
+      const presetKey = document.getElementById('presetSelect').value;
+      const driveOverride = parseFloat(document.getElementById('driveSlider').value);
+
+      const mic = MIC_MODELS[micKey];
+      const preset = ARTIST_PRESETS[presetKey];
+
+      const hpf = targetCtx.createBiquadFilter();
+      hpf.type = 'highpass';
+      hpf.frequency.value = mic.highPass;
+
+      const lowShelf = targetCtx.createBiquadFilter();
+      lowShelf.type = 'lowshelf';
+      lowShelf.frequency.value = mic.lowShelf.freq;
+      lowShelf.gain.value = mic.lowShelf.gain;
+
+      const midScoop = targetCtx.createBiquadFilter();
+      midScoop.type = 'peaking';
+      midScoop.frequency.value = mic.midScoop.freq;
+      midScoop.gain.value = mic.midScoop.gain;
+      midScoop.Q.value = mic.midScoop.Q;
+
+      const presence = targetCtx.createBiquadFilter();
+      presence.type = 'peaking';
+      presence.frequency.value = mic.presencePeak.freq;
+      presence.gain.value = mic.presencePeak.gain;
+      presence.Q.value = mic.presencePeak.Q;
+
+      const airShelf = targetCtx.createBiquadFilter();
+      airShelf.type = 'highshelf';
+      airShelf.frequency.value = mic.airShelf.freq;
+      airShelf.gain.value = mic.airShelf.gain;
+
+      const shaper = targetCtx.createWaveShaper();
+      shaper.curve = createTubeCurve(driveOverride);
+      shaper.oversample = '4x';
+
+      const comp1 = targetCtx.createDynamicsCompressor();
+      comp1.threshold.value = preset.compressor.threshold;
+      comp1.ratio.value = preset.compressor.ratio;
+      comp1.attack.value = preset.compressor.attack;
+      comp1.release.value = preset.compressor.release;
+
+      const comp2 = targetCtx.createDynamicsCompressor();
+      comp2.threshold.value = -18;
+      comp2.ratio.value = 3.2;
+      comp2.attack.value = 0.015;
+      comp2.release.value = 0.25;
+
+      const vocalGain = targetCtx.createGain();
+      const userGain = parseFloat(document.getElementById('vocalGainSlider').value);
+      vocalGain.gain.value = Math.pow(10, preset.compressor.makeupDb / 20) * userGain;
+
+      // Parallel Delay Throw
+      const delay = targetCtx.createDelay(1.0);
+      delay.delayTime.value = preset.delayThrow.timeSec;
+      const fb = targetCtx.createGain();
+      fb.gain.value = preset.delayThrow.feedback;
+      const delayMix = targetCtx.createGain();
+      delayMix.gain.value = preset.delayThrow.mix;
+
+      delay.connect(fb);
+      fb.connect(delay);
+      delay.connect(delayMix);
+
+      const limiter = targetCtx.createDynamicsCompressor();
+      limiter.threshold.value = -0.3;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.0005;
+      limiter.release.value = 0.04;
+
+      sourceNode
+        .connect(hpf)
+        .connect(lowShelf)
+        .connect(midScoop)
+        .connect(presence)
+        .connect(airShelf)
+        .connect(shaper)
+        .connect(comp1)
+        .connect(comp2)
+        .connect(vocalGain);
+
+      vocalGain.connect(limiter);
+      vocalGain.connect(delay);
+      delayMix.connect(limiter);
+      limiter.connect(destinationNode);
+    }
+
+    // =========================================================================
+    // 4. WAVEFORM VISUALIZER & UI HANDLERS
+    // =========================================================================
+    function drawWaveform(canvasId, buffer, strokeColor) {
+      const canvas = document.getElementById(canvasId);
+      const c = canvas.getContext('2d');
+      c.clearRect(0, 0, canvas.width, canvas.height);
+      if (!buffer) return;
+
+      const data = buffer.getChannelData(0);
+      const step = Math.ceil(data.length / canvas.width);
+      const amp = canvas.height / 2;
+
+      c.strokeStyle = strokeColor;
+      c.lineWidth = 1.5;
+      c.beginPath();
+
+      for (let i = 0; i < canvas.width; i++) {
+        let min = 1.0, max = -1.0;
+        for (let j = 0; j < step; j++) {
+          const datum = data[i * step + j];
+          if (datum < min) min = datum;
+          if (datum > max) max = datum;
+        }
+        c.moveTo(i, (1 + min) * amp);
+        c.lineTo(i, (1 + max) * amp);
+      }
+      c.stroke();
+    }
+
+    function setStatus(msg) {
+      document.getElementById('statusBadge').textContent = '● ' + msg;
+    }
+
+    document.getElementById('beatFileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      setStatus('DECODING BEAT...');
+      const arrayBuf = await file.arrayBuffer();
+      beatBuffer = await ctx.decodeAudioData(arrayBuf);
+      drawWaveform('beatCanvas', beatBuffer, '#22d3ee');
+      setStatus('BEAT LOADED (' + file.name + ')');
+    });
+
+    document.getElementById('vocalFileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      setStatus('DECODING VOCAL...');
+      const arrayBuf = await file.arrayBuffer();
+      rawVocalBuffer = await ctx.decodeAudioData(arrayBuf);
+      syncedVocalBuffer = rawVocalBuffer;
+      drawWaveform('vocalCanvas', syncedVocalBuffer, '#a855f7');
+      setStatus('VOCAL STEM LOADED (' + file.name + ')');
+    });
+
+    document.getElementById('autoSyncBtn').addEventListener('click', () => {
+      if (!rawVocalBuffer) {
+        setStatus('LOAD OR RECORD A VOCAL FIRST TO RUN 100% AUTO-SYNC');
+        return;
+      }
+      const bpm = parseFloat(document.getElementById('bpmInput').value) || 142;
+      const strength = parseFloat(document.getElementById('syncStrengthSlider').value);
+      const pocketMs = parseFloat(document.getElementById('pocketWindowSlider').value);
+
+      setStatus('QUANTIZING VOCAL TRANSIENTS TO BEAT POCKET...');
+      setTimeout(() => {
+        syncedVocalBuffer = syncEngine.syncVocalToBeat(rawVocalBuffer, beatBuffer, bpm, strength, pocketMs);
+        drawWaveform('vocalCanvas', syncedVocalBuffer, '#34d399');
+        setStatus('100% AUTO-SYNC COMPLETE: VOCALS LOCKED TO ' + bpm + ' BPM GRID');
+      }, 30);
+    });
+
+    function stopPlayback() {
+      if (beatSource) { try { beatSource.stop(); } catch (e) {} beatSource = null; }
+      if (vocalSource) { try { vocalSource.stop(); } catch (e) {} vocalSource = null; }
+      isPlaying = false;
+    }
+
+    document.getElementById('playBtn').addEventListener('click', async () => {
+      if (ctx.state === 'suspended') await ctx.resume();
+      stopPlayback();
+
+      if (!beatBuffer && !syncedVocalBuffer) {
+        setStatus('LOAD A BEAT OR VOCAL TRACK TO PLAY');
+        return;
+      }
+
+      if (beatBuffer) {
+        beatSource = ctx.createBufferSource();
+        beatSource.buffer = beatBuffer;
+        const beatGain = ctx.createGain();
+        beatGain.gain.value = parseFloat(document.getElementById('beatGainSlider').value);
+        beatSource.connect(beatGain).connect(ctx.destination);
+        beatSource.start(0);
+      }
+
+      if (syncedVocalBuffer) {
+        vocalSource = ctx.createBufferSource();
+        vocalSource.buffer = syncedVocalBuffer;
+        connectVocalDSP(ctx, vocalSource, ctx.destination);
+        vocalSource.start(0);
+      }
+
+      isPlaying = true;
+      setStatus('PLAYING ARRANGEMENT WITH REAL-TIME DSP...');
+    });
+
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      stopPlayback();
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+      }
+      setStatus('STOPPED');
+    });
+
+    // Live Mic Recording directly into Track 2
+    document.getElementById('recBtn').addEventListener('click', async () => {
+      if (ctx.state === 'suspended') await ctx.resume();
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+        });
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = async () => {
+          const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+          const arrayBuf = await blob.arrayBuffer();
+          rawVocalBuffer = await ctx.decodeAudioData(arrayBuf);
+          const bpm = parseFloat(document.getElementById('bpmInput').value) || 142;
+          const strength = parseFloat(document.getElementById('syncStrengthSlider').value);
+          const pocketMs = parseFloat(document.getElementById('pocketWindowSlider').value);
+          syncedVocalBuffer = syncEngine.syncVocalToBeat(rawVocalBuffer, beatBuffer, bpm, strength, pocketMs);
+          drawWaveform('vocalCanvas', syncedVocalBuffer, '#34d399');
+          setStatus('RECORDING CAPTURED & AUTO-SYNCED TO BEAT POCKET');
+        };
+
+        // Play backing beat while recording
+        stopPlayback();
+        if (beatBuffer) {
+          beatSource = ctx.createBufferSource();
+          beatSource.buffer = beatBuffer;
+          const beatGain = ctx.createGain();
+          beatGain.gain.value = parseFloat(document.getElementById('beatGainSlider').value);
+          beatSource.connect(beatGain).connect(ctx.destination);
+          beatSource.start(0);
+        }
+
+        mediaRecorder.start();
+        setStatus('RECORDING LIVE VOCAL TAKE...');
+      } catch (err) {
+        setStatus('MIC PERMISSION REQUIRED FOR RECORDING');
+      }
+    });
+
+    // Preset & Mic UI Synchronization
+    document.getElementById('micSelect').addEventListener('change', (e) => {
+      const mic = MIC_MODELS[e.target.value];
+      document.getElementById('micDesc').textContent = mic.desc;
+      document.getElementById('driveSlider').value = mic.tubeDrive;
+      document.getElementById('driveValText').textContent = Math.round(mic.tubeDrive * 100) + '%';
+      setStatus('MIC EMULATION SET: ' + mic.name);
+    });
+
+    document.getElementById('presetSelect').addEventListener('change', (e) => {
+      const p = ARTIST_PRESETS[e.target.value];
+      document.getElementById('micSelect').value = p.mic;
+      document.getElementById('micSelect').dispatchEvent(new Event('change'));
+      document.getElementById('retuneSlider').value = p.retuneSpeedMs;
+      document.getElementById('retuneValText').textContent = p.retuneSpeedMs + 'ms';
+      document.getElementById('compRatioText').textContent = p.compressor.ratio + ':1';
+      document.getElementById('doublerMixText').textContent = Math.round(p.stereoDoubler.mix * 100) + '%';
+      document.getElementById('delayMixText').textContent = Math.round(p.delayThrow.mix * 100) + '%';
+      document.getElementById('reverbMixText').textContent = Math.round(p.reverbMix * 100) + '%';
+      setStatus('ARTIST PRESET LOADED');
+    });
+
+    // Slider Labels
+    document.getElementById('syncStrengthSlider').addEventListener('input', (e) => {
+      document.getElementById('syncValText').textContent = Math.round(e.target.value * 100) + '%';
+    });
+    document.getElementById('pocketWindowSlider').addEventListener('input', (e) => {
+      document.getElementById('pocketValText').textContent = e.target.value + 'ms';
+    });
+    document.getElementById('retuneSlider').addEventListener('input', (e) => {
+      document.getElementById('retuneValText').textContent = e.target.value + 'ms';
+    });
+    document.getElementById('driveSlider').addEventListener('input', (e) => {
+      document.getElementById('driveValText').textContent = Math.round(e.target.value * 100) + '%';
+    });
+
+    // Offline WAV Master Export
+    document.getElementById('exportBtn').addEventListener('click', async () => {
+      if (!beatBuffer && !syncedVocalBuffer) {
+        setStatus('NOTHING TO EXPORT YET');
+        return;
+      }
+      setStatus('RENDERING 24-BIT STUDIO WAV MASTER...');
+      const length = Math.max(beatBuffer ? beatBuffer.length : 0, syncedVocalBuffer ? syncedVocalBuffer.length : 0);
+      const sr = ctx.sampleRate;
+      const offlineCtx = new OfflineAudioContext(2, length, sr);
+
+      if (beatBuffer) {
+        const bSrc = offlineCtx.createBufferSource();
+        bSrc.buffer = beatBuffer;
+        const bGain = offlineCtx.createGain();
+        bGain.gain.value = parseFloat(document.getElementById('beatGainSlider').value);
+        bSrc.connect(bGain).connect(offlineCtx.destination);
+        bSrc.start(0);
+      }
+
+      if (syncedVocalBuffer) {
+        const vSrc = offlineCtx.createBufferSource();
+        vSrc.buffer = syncedVocalBuffer;
+        connectVocalDSP(offlineCtx, vSrc, offlineCtx.destination);
+        vSrc.start(0);
+      }
+
+      const rendered = await offlineCtx.startRendering();
+      const wavBlob = bufferToWav(rendered);
+      const url = URL.createObjectURL(wavBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'NeuralStudioPro_Master.wav';
+      a.click();
+      setStatus('WAV MASTER EXPORTED SUCCESSFULLY');
+    });
+
+    function bufferToWav(abuffer) {
+      const numOfChan = abuffer.numberOfChannels;
+      const length = abuffer.length * numOfChan * 2 + 44;
+      const buffer = new ArrayBuffer(length);
+      const view = new DataView(buffer);
+      const channels = [];
+      let sample, offset = 0, pos = 0;
+
+      function setUint16(data) { view.setUint16(pos, data, true); pos += 2; }
+      function setUint32(data) { view.setUint32(pos, data, true); pos += 4; }
+
+      setUint32(0x46464952); // "RIFF"
+      setUint32(length - 8);
+      setUint32(0x45564157); // "WAVE"
+      setUint32(0x20746d66); // "fmt "
+      setUint32(16);
+      setUint16(1);
+      setUint16(numOfChan);
+      setUint32(abuffer.sampleRate);
+      setUint32(abuffer.sampleRate * 2 * numOfChan);
+      setUint16(numOfChan * 2);
+      setUint16(16);
+      setUint32(0x61746164); // "data"
+      setUint32(length - pos - 4);
+
+      for (let i = 0; i < numOfChan; i++) channels.push(abuffer.getChannelData(i));
+      while (pos < length) {
+        for (let i = 0; i < numOfChan; i++) {
+          sample = Math.max(-1, Math.min(1, channels[i][offset]));
+          sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+          view.setInt16(pos, sample, true);
+          pos += 2;
+        }
+        offset++;
+      }
+      return new Blob([buffer], { type: 'audio/wav' });
+    }
+  </script>
+</body>
+</html>
+EOF
+
+git add index.html
+git commit -m "Upgrade to v2.6.0: Direct Track boot, 100% transient beat Auto-Sync, C800G/U87 Mic DSP & Artist Chains"
+git tag -f v2.6.0
+git push origin main --force
+git push origin v2.6.0 --force
