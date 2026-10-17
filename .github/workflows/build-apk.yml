@@ -55,7 +55,6 @@ jobs:
             fi
           fi
 
-          # Strip any external Tailwind/CDN scripts that would fail offline if needed & ensure index.html exists
           ls -la android-build/app/src/main/assets/
 
           # Write settings.gradle
@@ -199,7 +198,6 @@ jobs:
                       @Override
                       public void onPageFinished(WebView view, String url) {
                           super.onPageFinished(view, url);
-                          // Automatically intercept standard <a download> Blob links from AI Studio so WAV exports save on Android
                           view.evaluateJavascript(
                               "(function() {" +
                               "  document.addEventListener('click', function(e) {" +
@@ -262,14 +260,15 @@ jobs:
           }
           EOF
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.4'
-
-      - name: Compile APK from Your Repo Code
+      - name: Generate Gradle Wrapper
         working-directory: ./android-build
-        run: gradle assembleDebug --no-daemon
+        run: |
+          gradle wrapper --gradle-version 8.4
+          chmod +x gradlew
+
+      - name: Compile APK via Gradle Wrapper
+        working-directory: ./android-build
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Prepare Release APK
         run: cp android-build/app/build/outputs/apk/debug/app-debug.apk NueralStudioPro-Offline.apk
